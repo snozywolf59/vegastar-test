@@ -1,0 +1,23 @@
+app:
+  name: vega-agent
+  debug: false
+
+server:
+  host: ${APP_HOST}
+  port: ${APP_PORT}
+
+database:
+  host: ${POSTGRES_HOST}
+  port: ${POSTGRES_PORT}
+  database: ${POSTGRES_DB}
+  user: ${POSTGRES_USER}
+  password: ${POSTGRES_PASSWORD}
+
+model:
+  name: ${LLM_MAIN_MODEL}
+  embedding_model: ${EMBEDDING_MODEL}
+
+threshold:
+  memory_mb: 1024
+  similarity: 0.75
+  confidence: 0.8
