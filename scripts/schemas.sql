@@ -1,5 +1,4 @@
 CREATE EXTENSION IF NOT EXISTS postgis;
- 
 -- ---------- vessels ----------
 CREATE TABLE IF NOT EXISTS vessels (
     vessel_id             TEXT PRIMARY KEY,
@@ -108,3 +107,54 @@ CREATE INDEX IF NOT EXISTS idx_own_vessel     ON ownership (vessel_id);
 CREATE INDEX IF NOT EXISTS idx_own_role       ON ownership (role);
 CREATE INDEX IF NOT EXISTS idx_own_company    ON ownership (company_name_norm);
 CREATE INDEX IF NOT EXISTS idx_own_country    ON ownership (company_country);
+
+
+-- conversation
+CREATE TABLE sessions (
+    session_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title TEXT,
+    status TEXT NOT NULL DEFAULT 'active'
+        CHECK (status IN ('active', 'closed')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE messages (
+    message_id BIGSERIAL PRIMARY KEY,
+    session_id UUID NOT NULL
+        REFERENCES sessions(session_id) ON DELETE CASCADE,
+
+    sequence_no BIGINT NOT NULL,
+    role TEXT NOT NULL
+        CHECK (role IN ('system', 'user', 'assistant', 'tool')),
+    content TEXT,
+
+    --tool call
+    tool_name TEXT,
+    tool_call_id TEXT,
+    tool_calls JSONB,
+
+    metadata JSONB NOT NULL DEFAULT '{}',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    UNIQUE (session_id, sequence_no)
+);
+
+CREATE INDEX idx_messages_session_sequence
+    ON messages (session_id, sequence_no);
+
+CREATE TABLE session_memories (
+    memory_id BIGSERIAL PRIMARY KEY,
+    session_id UUID NOT NULL
+        REFERENCES sessions(session_id) ON DELETE CASCADE,
+
+    memory_key TEXT NOT NULL,
+    memory_value JSONB NOT NULL,
+    source_message_id BIGINT
+        REFERENCES messages(message_id) ON DELETE SET NULL,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    UNIQUE (session_id, memory_key)
+);

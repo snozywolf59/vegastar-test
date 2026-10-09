@@ -29,6 +29,38 @@ TABLES = [
      {"vessel_id", "role", "company_name", "company_country", "start_date"}),
 ]
 
+import psycopg2
+from psycopg2 import sql
+from psycopg2.extensions import parse_dsn
+
+
+def ensure_database(dsn: str) -> None:
+    config = parse_dsn(dsn)
+    db_name = config.pop("dbname", "postgres")
+
+    conn = psycopg2.connect(
+        **{**config, "dbname": "postgres"}
+    )
+    conn.autocommit = True
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT 1 FROM pg_database WHERE datname = %s",
+                (db_name,),
+            )
+
+            if cur.fetchone() is None:
+                cur.execute(
+                    sql.SQL("CREATE DATABASE {}").format(
+                        sql.Identifier(db_name)
+                    )
+                )
+                print(f"Created database: {db_name}")
+            else:
+                print(f"Database already exists: {db_name}")
+    finally:
+        conn.close()
 
 def read_header(path):
     with open(path, "r", encoding="utf-8-sig", newline="") as f:
@@ -60,7 +92,7 @@ def main():
 
     if not args.dsn:
         sys.exit("Thiếu kết nối: đặt DATABASE_URL hoặc dùng --dsn")
-
+    ensure_database(args.dsn)
     for _, fname, _, _ in TABLES:
         p = os.path.join(args.data_dir, fname)
         if not os.path.isfile(p):
