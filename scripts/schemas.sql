@@ -158,3 +158,8 @@ CREATE TABLE session_memories (
 
     UNIQUE (session_id, memory_key)
 );
+
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+CREATE INDEX IF NOT EXISTS idx_vessels_shipname_trgm
+ON vessels USING GIN (shipname gin_trgm_ops);
