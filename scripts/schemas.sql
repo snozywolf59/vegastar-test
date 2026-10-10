@@ -1,4 +1,5 @@
 CREATE EXTENSION IF NOT EXISTS postgis;
+CREATE EXTENSION IF NOT EXISTS vector;
 -- ---------- vessels ----------
 CREATE TABLE IF NOT EXISTS vessels (
     vessel_id             TEXT PRIMARY KEY,
@@ -110,7 +111,7 @@ CREATE INDEX IF NOT EXISTS idx_own_country    ON ownership (company_country);
 
 
 -- conversation
-CREATE TABLE sessions (
+CREATE TABLE IF NOT EXISTS sessions (
     session_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     title TEXT,
     status TEXT NOT NULL DEFAULT 'active'
@@ -119,7 +120,7 @@ CREATE TABLE sessions (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE messages (
+CREATE TABLE IF NOT EXISTS messages (
     message_id BIGSERIAL PRIMARY KEY,
     session_id UUID NOT NULL
         REFERENCES sessions(session_id) ON DELETE CASCADE,
@@ -140,16 +141,17 @@ CREATE TABLE messages (
     UNIQUE (session_id, sequence_no)
 );
 
-CREATE INDEX idx_messages_session_sequence
+CREATE INDEX IF NOT EXISTS idx_messages_session_sequence
     ON messages (session_id, sequence_no);
 
-CREATE TABLE session_memories (
+CREATE TABLE IF NOT EXISTS session_memories (
     memory_id BIGSERIAL PRIMARY KEY,
     session_id UUID NOT NULL
         REFERENCES sessions(session_id) ON DELETE CASCADE,
 
     memory_key TEXT NOT NULL,
     memory_value JSONB NOT NULL,
+    embedding vector,
     source_message_id BIGINT
         REFERENCES messages(message_id) ON DELETE SET NULL,
 

@@ -57,8 +57,8 @@ def search_vessels(
     params: list[object] = []
 
     if ship_name and ship_name.strip():
-        filters.append("shipname ILIKE %s")
-        params.append(f"%{ship_name.strip()}%")
+        filters.append("shipname %% %s")
+        params.extend((ship_name.strip().upper()))
 
     if mmsi and mmsi.strip():
         filters.append("mmsi = %s")
@@ -87,7 +87,6 @@ def search_vessels(
         })
 
     limit = clamp_limit(limit)
-    params.append(limit)
 
     query = f"""
         SELECT
@@ -99,12 +98,24 @@ def search_vessels(
             flag_code,
             flag,
             ship_type_summary,
-            ship_type_detail_name
+            ship_type_detail_name,
+            similarity(shipname, %s) AS name_similarity
         FROM vessels
         WHERE {" AND ".join(filters)}
-        ORDER BY shipname NULLS LAST, vessel_id
+        ORDER BY
+            similarity(shipname, %s) DESC NULLS LAST,
+            shipname NULLS LAST,
+            vessel_id
         LIMIT %s
     """
+
+    if ship_name and ship_name.strip():
+        params.extend(
+            (ship_name.strip(), f"%{ship_name.strip()}%", ship_name.strip())
+        )
+    else:
+        params.extend((None, None, None))
+    params.append(limit)
 
     rows = fetch_all(query, tuple(params))
     return to_json({

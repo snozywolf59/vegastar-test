@@ -1,6 +1,8 @@
 services:
   postgres:
-    image: postgis/postgis:17-3.5
+    build:
+      context: .
+      dockerfile: docker/postgres/Dockerfile
     container_name: postgres-db
     restart: unless-stopped
 

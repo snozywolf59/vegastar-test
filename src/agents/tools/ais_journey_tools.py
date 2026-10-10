@@ -215,4 +215,4 @@ AIS_JOURNEY_TOOLS = [
     get_vessel_dark_gaps,
     get_vessels_journeys,
 ]
-VESSEL_TOOLS = VESSEL_COMPANY_TOOLS + AIS_JOURNEY_TOOLS
+
