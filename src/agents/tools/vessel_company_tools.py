@@ -1,45 +1,42 @@
 
 """Tools for searching vessels and companies in the maritime database."""
 
-import json
-import os
-from typing import Any
-
-import psycopg2
-from psycopg2.extras import RealDictCursor
+from pydantic import BaseModel, Field
 from langchain_core.tools import tool
+from src.agents.tools._common import (
+    VesselIdInput,
+    clamp_limit,
+    fetch_all,
+    to_json,
+)
 
 
-def _fetch_all(
-    query: str,
-    params: tuple[Any, ...],
-) -> list[dict[str, Any]]:
-    """Execute a parameterized read-only query and return dictionary rows."""
-    database_url = os.environ.get("DATABASE_URL")
-    if not database_url:
-        raise RuntimeError("DATABASE_URL is not configured.")
+class SearchVesselsInput(BaseModel):
+    """Arguments for searching vessels."""
 
-    with psycopg2.connect(database_url, connect_timeout=5) as conn:
-        # Defense in depth: reject accidental writes from these tools.
-        conn.set_session(readonly=True, autocommit=False)
-
-        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
-            cursor.execute("SET LOCAL statement_timeout = '5s'")
-            cursor.execute(query, params)
-            return [dict(row) for row in cursor.fetchall()]
+    ship_name: str | None = Field(default=None, description="Partial vessel name")
+    mmsi: str | None = Field(default=None, description="Exact MMSI")
+    imo: str | None = Field(default=None, description="Exact IMO")
+    flag_code: str | None = Field(default=None, description="Flag country code")
+    ship_type: str | None = Field(default=None, description="Vessel type")
+    limit: int = Field(default=10, description="Maximum number of matches")
 
 
-def _json(data: Any) -> str:
-    """Serialize tool results into JSON."""
-    return json.dumps(data, ensure_ascii=False, default=str)
+class VesselOwnershipInput(VesselIdInput):
+    """Arguments for vessel ownership lookup."""
+
+    role: str | None = Field(default=None, description="Exact ownership role")
 
 
-def _validate_limit(limit: int, maximum: int = 100) -> int:
-    """Clamp result limits to a safe range."""
-    return max(1, min(limit, maximum))
+class CompanyVesselsInput(BaseModel):
+    """Arguments for finding vessels associated with a company."""
+
+    company_name: str = Field(description="Full or partial company name")
+    role: str | None = Field(default=None, description="Exact ownership role")
+    limit: int = Field(default=20, description="Maximum number of vessels")
 
 
-@tool
+@tool(args_schema=SearchVesselsInput)
 def search_vessels(
     ship_name: str | None = None,
     mmsi: str | None = None,
@@ -57,7 +54,7 @@ def search_vessels(
     At least one search criterion is required.
     """
     filters: list[str] = []
-    params: list[Any] = []
+    params: list[object] = []
 
     if ship_name and ship_name.strip():
         filters.append("shipname ILIKE %s")
@@ -84,12 +81,12 @@ def search_vessels(
         params.extend([value, value])
 
     if not filters:
-        return _json({
+        return to_json({
             "error": "missing_search_criteria",
             "message": "Provide at least one search criterion.",
         })
 
-    limit = _validate_limit(limit)
+    limit = clamp_limit(limit)
     params.append(limit)
 
     query = f"""
@@ -109,15 +106,15 @@ def search_vessels(
         LIMIT %s
     """
 
-    rows = _fetch_all(query, tuple(params))
-    return _json({
+    rows = fetch_all(query, tuple(params))
+    return to_json({
         "count": len(rows),
         "limit": limit,
         "results": rows,
     })
 
 
-@tool
+@tool(args_schema=VesselIdInput)
 def get_vessel_details(vessel_id: str) -> str:
     """Get the registered specifications of one vessel by vessel_id.
 
@@ -125,7 +122,7 @@ def get_vessel_details(vessel_id: str) -> str:
     This tool does not retrieve the vessel's latest AIS position.
     """
     if not vessel_id.strip():
-        return _json({"error": "vessel_id is required"})
+        return to_json({"error": "vessel_id is required"})
 
     query = """
         SELECT
@@ -148,18 +145,18 @@ def get_vessel_details(vessel_id: str) -> str:
         LIMIT 1
     """
 
-    rows = _fetch_all(query, (vessel_id.strip(),))
+    rows = fetch_all(query, (vessel_id.strip(),))
     if not rows:
-        return _json({
+        return to_json({
             "found": False,
             "vessel_id": vessel_id,
             "message": "No vessel found for this vessel_id.",
         })
 
-    return _json({"found": True, "vessel": rows[0]})
+    return to_json({"found": True, "vessel": rows[0]})
 
 
-@tool
+@tool(args_schema=VesselOwnershipInput)
 def get_vessel_ownership(
     vessel_id: str,
     role: str | None = None,
@@ -170,7 +167,7 @@ def get_vessel_ownership(
     Check the database's actual role values before using this filter.
     """
     if not vessel_id.strip():
-        return _json({"error": "vessel_id is required"})
+        return to_json({"error": "vessel_id is required"})
 
     query = """
         SELECT
@@ -188,19 +185,19 @@ def get_vessel_ownership(
     """
 
     normalized_role = role.strip() if role and role.strip() else None
-    rows = _fetch_all(
+    rows = fetch_all(
         query,
         (vessel_id.strip(), normalized_role, normalized_role),
     )
 
-    return _json({
+    return to_json({
         "vessel_id": vessel_id,
         "count": len(rows),
         "ownership_records": rows,
     })
 
 
-@tool
+@tool(args_schema=CompanyVesselsInput)
 def search_vessels_by_company(
     company_name: str,
     role: str | None = None,
@@ -213,11 +210,11 @@ def search_vessels_by_company(
     actually present in the database.
     """
     if not company_name.strip():
-        return _json({
+        return to_json({
             "error": "company_name is required",
         })
 
-    limit = _validate_limit(limit)
+    limit = clamp_limit(limit)
     company_pattern = f"%{company_name.strip()}%"
     normalized_role = role.strip() if role and role.strip() else None
 
@@ -243,7 +240,7 @@ def search_vessels_by_company(
         LIMIT %s
     """
 
-    rows = _fetch_all(
+    rows = fetch_all(
         query,
         (
             company_pattern,
@@ -254,7 +251,7 @@ def search_vessels_by_company(
         ),
     )
 
-    return _json({
+    return to_json({
         "company_query": company_name,
         "role_filter": normalized_role,
         "count": len(rows),
