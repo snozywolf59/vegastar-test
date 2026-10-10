@@ -1,4 +1,4 @@
-"""Persistent conversation and pgvector memory repository."""
+"""Persistent conversation history and summary repository."""
 
 import json
 import asyncio
@@ -9,16 +9,15 @@ from uuid import UUID
 
 import psycopg2
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
-from psycopg2.extras import Json, RealDictCursor,register_uuid
+from psycopg2.extras import Json, RealDictCursor, register_uuid
 
 register_uuid()
 
 class ConversationRepository:
-    """Read and write conversation messages and session-scoped memories."""
+    """Read and write conversation messages and rolling summaries."""
 
-    def __init__(self, database_url: str, embedding_dimensions: int) -> None:
+    def __init__(self, database_url: str) -> None:
         self._database_url = database_url
-        self._dimensions = embedding_dimensions
 
     def _connect(self) -> psycopg2.extensions.connection:
         return psycopg2.connect(self._database_url, connect_timeout=5)
@@ -55,17 +54,32 @@ class ConversationRepository:
             raise
 
     def initialize(self) -> None:
-        """Ensure pgvector memory columns and a matching HNSW index exist."""
+        """Ensure sessions have a place to store their rolling summary."""
         with self._connection() as connection, connection.cursor() as cursor:
-            cursor.execute("CREATE EXTENSION IF NOT EXISTS vector")
             cursor.execute(
-                "ALTER TABLE session_memories "
-                "ADD COLUMN IF NOT EXISTS embedding vector"
+                "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS summary TEXT NOT NULL DEFAULT ''"
             )
             cursor.execute(
-                "CREATE INDEX IF NOT EXISTS idx_session_memories_embedding "
-                "ON session_memories USING hnsw "
-                f"((embedding::vector({self._dimensions})) vector_cosine_ops)"
+                "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS summary_through_sequence BIGINT NOT NULL DEFAULT 0"
+            )
+
+    def get_summary_state(self, conversation_id: UUID) -> tuple[str, int]:
+        with self._connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT summary, summary_through_sequence FROM sessions WHERE session_id = %s",
+                (conversation_id,),
+            )
+            row = cursor.fetchone()
+            if row is None:
+                raise LookupError("Conversation not found.")
+            return row[0] or "", int(row[1])
+
+    def update_summary(self, conversation_id: UUID, summary: str, through_sequence: int) -> None:
+        with self._connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "UPDATE sessions SET summary = %s, summary_through_sequence = %s, "
+                "updated_at = NOW() WHERE session_id = %s",
+                (summary, through_sequence, conversation_id),
             )
 
     def create_conversation(self, title: str | None) -> dict[str, Any]:
@@ -142,6 +156,22 @@ class ConversationRepository:
         history = [self._to_langchain_message(row) for row in rows]
         return history
 
+    def load_history_with_sequences(
+        self,
+        conversation_id: UUID,
+    ) -> list[tuple[int, BaseMessage]]:
+        with self._connection() as connection, connection.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute(
+                """SELECT sequence_no, role, content, tool_name, tool_call_id, tool_calls
+                   FROM messages WHERE session_id = %s ORDER BY sequence_no""",
+                (conversation_id,),
+            )
+            rows = [dict(row) for row in cursor.fetchall()]
+        return [
+            (int(row["sequence_no"]), self._to_langchain_message(row))
+            for row in rows
+        ]
+
     def append_user_message(self, conversation_id: UUID, content: str) -> int:
         return self.append_messages(conversation_id, [HumanMessage(content=content)])[0]
 
@@ -185,54 +215,6 @@ class ConversationRepository:
                 (conversation_id,),
             )
         return inserted_ids
-
-    def store_memory(
-        self,
-        conversation_id: UUID,
-        memory_text: str,
-        embedding: list[float],
-        source_message_id: int | None,
-    ) -> None:
-        vector = self._vector_literal(embedding)
-        with self._connection() as connection, connection.cursor() as cursor:
-            cursor.execute(
-                """INSERT INTO session_memories
-                   (session_id, memory_key, memory_value, embedding, source_message_id)
-                   VALUES (%s, %s, %s, %s::vector, %s)
-                   ON CONFLICT (session_id, memory_key)
-                   DO UPDATE SET memory_value = EXCLUDED.memory_value,
-                                 embedding = EXCLUDED.embedding,
-                                 source_message_id = EXCLUDED.source_message_id,
-                                 updated_at = NOW()""",
-                (conversation_id, f"message:{source_message_id}",
-                 Json({"text": memory_text}), vector, source_message_id),
-            )
-
-    def search_memories(
-        self,
-        conversation_id: UUID,
-        embedding: list[float],
-        limit: int,
-        minimum_similarity: float,
-    ) -> list[str]:
-        vector = self._vector_literal(embedding)
-        distance = f"embedding::vector({self._dimensions}) <=> %s::vector({self._dimensions})"
-        with self._connection() as connection, connection.cursor() as cursor:
-            cursor.execute("SET LOCAL hnsw.ef_search = 100")
-            cursor.execute(
-                f"""SELECT memory_value->>'text'
-                    FROM session_memories
-                    WHERE session_id = %s AND embedding IS NOT NULL
-                      AND 1 - ({distance}) >= %s
-                    ORDER BY {distance}
-                    LIMIT %s""",
-                (conversation_id, vector, minimum_similarity, vector, limit),
-            )
-            return [str(row[0]) for row in cursor.fetchall() if row[0]]
-
-    @staticmethod
-    def _vector_literal(values: list[float]) -> str:
-        return "[" + ",".join(repr(float(value)) for value in values) + "]"
 
     @staticmethod
     def _message_content(content: object) -> str:

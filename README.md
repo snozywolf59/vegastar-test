@@ -1,7 +1,7 @@
 # Vessel Assistant
 
 FastAPI chat API for vessel data with Gemini tool calling, durable PostgreSQL
-conversation history, and pgvector semantic memory.
+conversation history, and rolling conversation summaries.
 
 ## Requirements
 
@@ -12,9 +12,9 @@ conversation history, and pgvector semantic memory.
 
 ## Configure and run
 
-1. Copy `.env.example` to `.env`, set `GEMINI_API_KEY`, `GEMINI_MODEL`, and
-   `GEMINI_EMBEDDING_MODEL`, then adjust the PostgreSQL password if needed.
-2. Start PostgreSQL with PostGIS and pgvector:
+1. Copy `.env.example` to `.env`, set `GEMINI_API_KEY` and `GEMINI_MODEL`, then
+   adjust the PostgreSQL password if needed.
+2. Start PostgreSQL with PostGIS:
 
    ```sh
    docker compose up -d --build postgres
@@ -35,12 +35,9 @@ conversation history, and pgvector semantic memory.
 
 Interactive API documentation is available at `http://localhost:8000/docs`.
 
-`GEMINI_EMBEDDING_DIMENSIONS` controls the Gemini embedding size and matching
-pgvector HNSW expression index. Keep this value unchanged after creating
-conversation memories unless the vector column and index are migrated.
-`CHAT_CONTEXT_TURNS` sets how many recent user turns are sent verbatim. Older
-turns remain stored and are retrieved by semantic similarity within their own
-conversation.
+`CHAT_CONTEXT_TURNS` sets how many recent user turns are sent verbatim. When
+older turns accumulate, Gemini updates a concise summary stored on that
+conversation; all original messages remain in PostgreSQL.
 
 ## Conversation API
 
@@ -65,8 +62,8 @@ Other endpoints:
 
 - `GET /conversations` lists conversations.
 - `GET /conversations/{id}/messages` reads persisted user, assistant, and tool messages.
-- `DELETE /conversations/{id}` deletes the conversation and its associated memories.
+- `DELETE /conversations/{id}` deletes the conversation and its associated history and summary.
 
-Conversation messages and vector memories are scoped by `session_id`. Requests
-for the same conversation are serialized with a PostgreSQL advisory lock, while
+Conversation messages and summaries are scoped by `session_id`. Requests for
+the same conversation are serialized with a PostgreSQL advisory lock, while
 separate conversations can run concurrently.

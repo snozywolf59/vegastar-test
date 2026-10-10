@@ -106,44 +106,57 @@ async def chat(
                 yield _sse("error", {"code": "conversation_not_found"})
                 return
 
-            history = await asyncio.to_thread(
-                repository.load_recent_history,
+            summary, summary_through = await asyncio.to_thread(
+                repository.get_summary_state,
                 conversation_id,
+            )
+            sequenced_history = await asyncio.to_thread(
+                repository.load_history_with_sequences,
+                conversation_id,
+            )
+            old_messages, recent_messages = _split_history(
+                [message for _, message in sequenced_history],
                 services.settings.chat_context_turns,
             )
+            old_count = len(old_messages)
+            new_old_messages = [
+                message
+                for sequence, message in sequenced_history[:old_count]
+                if sequence > summary_through
+            ]
+            history = recent_messages
             await asyncio.to_thread(
                 repository.append_user_message,
                 conversation_id,
                 payload.message,
             )
-
-            user_turns = sum(isinstance(message, HumanMessage) for message in history)
-            if user_turns >= services.settings.chat_context_turns:
+            if new_old_messages:
                 try:
-                    query_embedding = await services.embeddings.aembed_query(payload.message)
-                    memories = await asyncio.to_thread(
-                        repository.search_memories,
+                    summary_result = await services.summarizer.ainvoke([
+                        SystemMessage(content=(
+                            "Update the conversation summary using the existing summary and older messages. "
+                            "Preserve vessel names and identifiers, dates/times, confirmed choices, user preferences, "
+                            "open questions, and facts needed to resolve follow-ups. Do not invent facts. "
+                            "Return only the updated concise summary."
+                        )),
+                        HumanMessage(content=(
+                            f"Existing summary:\n{summary or '(none)'}\n\n"
+                            f"Messages to incorporate:\n{_format_messages(new_old_messages)}"
+                        )),
+                    ])
+                    summary = _content_text(summary_result.content)
+                    await asyncio.to_thread(
+                        repository.update_summary,
                         conversation_id,
-                        query_embedding,
-                        services.settings.memory_top_k,
-                        services.settings.memory_min_similarity,
+                        summary,
+                        max(sequence for sequence, _ in sequenced_history[:old_count]),
                     )
-                    if memories:
-                        memory_message = SystemMessage(
-                            content=(
-                                "Relevant facts recalled from this conversation only. "
-                                "Use them to resolve follow-ups, and distinguish them "
-                                "from facts retrieved from vessel tools:\n"
-                                + "\n---\n".join(memories)
-                            )
-                        )
-                        history = [memory_message, *history]
                 except Exception:
-                    logger.exception("Conversation memory retrieval failed.")
-                    yield _sse(
-                        "error",
-                        {"code": "memory_retrieval_failed", "message": "Long-term memory is temporarily unavailable."},
-                    )
+                    logger.exception("Conversation summarization failed.")
+                    yield _sse("error", {"code": "summary_failed", "message": "Could not update conversation summary."})
+                    return
+            if summary:
+                history = [SystemMessage(content=f"Conversation summary (older context):\n{summary}"), *history]
 
             try:
                 async for agent_event in services.agent.astream(payload.message, history):
@@ -173,29 +186,12 @@ async def chat(
                             messages,
                             payload.message,
                         )
-                        inserted_ids = await asyncio.to_thread(
+                        await asyncio.to_thread(
                             repository.append_messages,
                             conversation_id,
                             new_messages,
                         )
                         answer = str(agent_event.get("answer", ""))
-                        memory_text = f"User: {payload.message}\nAssistant: {answer}"
-                        try:
-                            vectors = await services.embeddings.aembed_documents([memory_text])
-                            if vectors:
-                                await asyncio.to_thread(
-                                    repository.store_memory,
-                                    conversation_id,
-                                    memory_text,
-                                    vectors[0],
-                                    inserted_ids[-1] if inserted_ids else None,
-                                )
-                        except Exception:
-                            logger.exception("Conversation memory write failed.")
-                            yield _sse(
-                                "error",
-                                {"code": "memory_write_failed", "message": "The answer was saved, but long-term memory could not be updated."},
-                            )
                         yield _sse(
                             "done",
                             {"conversation_id": conversation_id, "answer": answer},
@@ -235,3 +231,31 @@ def _messages_after_current_question(
         if isinstance(message, HumanMessage) and message.content == question:
             return messages[index + 1:]
     raise RuntimeError("The agent response did not contain the current user message.")
+
+
+def _split_history(messages: list[BaseMessage], recent_turns: int) -> tuple[list[BaseMessage], list[BaseMessage]]:
+    user_indices = [index for index, message in enumerate(messages) if isinstance(message, HumanMessage)]
+    if len(user_indices) <= recent_turns:
+        return [], messages
+    split_at = user_indices[-recent_turns]
+    return messages[:split_at], messages[split_at:]
+
+
+def _format_messages(messages: list[BaseMessage]) -> str:
+    return "\n".join(
+        f"{message.type}: {message.content}"
+        for message in messages
+        if message.content
+    )
+
+
+def _content_text(content: object) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "".join(
+            item.get("text", "")
+            for item in content
+            if isinstance(item, dict) and isinstance(item.get("text"), str)
+        )
+    return str(content)
