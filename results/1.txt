@@ -1,0 +1,70 @@
+Q: thông tin tàu kot gayya
+A: Dưới đây là thông tin chi tiết về tàu KOTA GAYA (tên bạn tìm kiếm có thể là phiên âm của từ này):
+
+1. Thông tin chung về tàu
+Tên tàu: KOTA GAYA
+Loại tàu: Tàu chở container (Container Ship)
+IMO: 9616802
+MMSI: 563152500
+Hô hiệu (Call Sign): 9V7466
+Quốc tịch treo cờ: Singapore
+Năm đóng: 2012
+Kích thước:
+Chiều dài: 222 m
+Chiều rộng: 30 m
+Trọng tải toàn phần (DWT): 39,598 tấn
+Tổng dung tích (GRT): 29,015 tấn
+2. Thông tin sở hữu và quản lý
+Tất cả các vai trò quản lý và sở hữu tàu đều thuộc về công ty PACIFIC INTERNATIONAL LINES (Singapore):
+
+Chủ sở hữu đăng ký (Registered Owner): PACIFIC INTERNATIONAL LINES (từ 17/03/2022)
+Chủ sở hữu hưởng lợi (Beneficial Owner): PACIFIC INTERNATIONAL LINES
+Người quản lý kỹ thuật & ISM (Technical & ISM Manager): PACIFIC INTERNATIONAL LINES
+Người vận hành (Operator): PACIFIC INTERNATIONAL LINES
+Quản lý thương mại (Commercial Manager): PACIFIC INTERNATIONAL LINES
+3. Vị trí AIS gần nhất
+Thời gian ghi nhận: 2026-09-12 23:50:07 (UTC)
+Tọa độ: 22.35115° N, 113.93468° E
+Trạng thái hàng hải: Đang hành trình (Under way)
+Tốc độ: 13.1 hải lý/giờ
+Hướng di chuyển: 110° (Hứơng mũi tàu: 111°)
+
+Q: Chủ sở hữu và các công ty quản lý của tàu này là ai?
+A: Dựa trên cơ sở dữ liệu, thông tin về chủ sở hữu và các công ty quản lý của tàu KOTA GAYA đều thuộc về công ty PACIFIC INTERNATIONAL LINES (có trụ sở tại Singapore) đảm nhận qua tất cả các vai trò chính:
+
+Chủ sở hữu đăng ký (Registered Owner): PACIFIC INTERNATIONAL LINES
+Chủ sở hữu thụ hưởng (Beneficial Owner): PACIFIC INTERNATIONAL LINES
+Quản lý kỹ thuật (Technical Manager): PACIFIC INTERNATIONAL LINES
+Quản lý ISM (ISM Manager): PACIFIC INTERNATIONAL LINES
+Người vận hành (Operator): PACIFIC INTERNATIONAL LINES
+Quản lý thương mại (Commercial Manager): PACIFIC INTERNATIONAL LINES
+
+Q: Dựa trên cơ sở dữ liệu, thông tin về chủ sở hữu và các công ty quản lý của tàu KOTA GAYA đều thuộc về công ty PACIFIC INTERNATIONAL LINES (có trụ sở tại Singapore) đảm nhận qua tất cả các vai trò chính:
+
+Chủ sở hữu đăng ký (Registered Owner): PACIFIC INTERNATIONAL LINES
+Chủ sở hữu thụ hưởng (Beneficial Owner): PACIFIC INTERNATIONAL LINES
+Quản lý kỹ thuật (Technical Manager): PACIFIC INTERNATIONAL LINES
+Quản lý ISM (ISM Manager): PACIFIC INTERNATIONAL LINES
+Người vận hành (Operator): PACIFIC INTERNATIONAL LINES
+Quản lý thương mại (Commercial Manager): PACIFIC INTERNATIONAL LINES
+
+A: Dựa trên cơ sở dữ liệu, công ty chủ sở hữu đăng ký PACIFIC INTERNATIONAL LINES đứng tên sở hữu các tàu sau đây:
+
+KOTA GAYA (IMO: 9616802, Cờ: Singapore)
+KOTA LAYANG (IMO: 9439759, Cờ: Singapore)
+KOTA NAZIM (IMO: 9390240, Cờ: Singapore)
+KOTA NEKAD (IMO: 9390252, Cờ: Singapore)
+KOTA RATU (IMO: 9167435, Cờ: Singapore)
+KOTA SEGAR (IMO: 9681235, Cờ: Singapore)
+KOTA SELAMAT (IMO: 9681261, Cờ: Singapore)
+KOTA SETIA (IMO: 9681285, Cờ: Singapore)
+
+Q: Lúc 21:00 ngày 11/09/2026 (UTC) tàu đó đang ở đâu?
+A: Dựa trên yêu cầu của bạn về vị trí tàu KOTA GAYA vào lúc 21:00 UTC ngày 11/09/2026, đây là điểm dữ liệu AIS gần nhất được hệ thống ghi nhận:
+
+Thời điểm ghi nhận AIS gần nhất: 2026-09-11 21:33:04+00:00 (lệch khoảng 1.984 giây / ~33 phút so với mốc 21:00 UTC). Xin lưu ý đây là điểm AIS được báo cáo gần thời điểm yêu cầu nhất chứ không phải vị trí nội suy.
+Vĩ độ (Lat): 21.79336°
+Kinh độ (Lon): 114.08408°
+Tình trạng hành trình: Đang di chuyển (Under way)
+Tốc độ: 8.2 hải lý/giờ (knots)
+Hướng di chuyển (Course): 51° (Mũi tàu hướng 58°)
