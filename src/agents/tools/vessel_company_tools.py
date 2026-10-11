@@ -58,7 +58,7 @@ def search_vessels(
 
     if ship_name and ship_name.strip():
         filters.append("shipname %% %s")
-        params.extend((ship_name.strip().upper()))
+        params.append((ship_name.strip().upper()))
 
     if mmsi and mmsi.strip():
         filters.append("mmsi = %s")
@@ -79,13 +79,12 @@ def search_vessels(
         )
         value = f"%{ship_type.strip()}%"
         params.extend([value, value])
-
+   
     if not filters:
         return to_json({
             "error": "missing_search_criteria",
             "message": "Provide at least one search criterion.",
         })
-
     limit = clamp_limit(limit)
 
     query = f"""
@@ -108,15 +107,13 @@ def search_vessels(
             vessel_id
         LIMIT %s
     """
-
     if ship_name and ship_name.strip():
-        params.extend(
-            (ship_name.strip(), f"%{ship_name.strip()}%", ship_name.strip())
-        )
+        params.append(ship_name.strip().upper())
+        params.insert(0, ship_name.strip().upper())
     else:
-        params.extend((None, None, None))
+        params.append(None)
+        params.insert(0, None)
     params.append(limit)
-
     rows = fetch_all(query, tuple(params))
     return to_json({
         "count": len(rows),
@@ -175,7 +172,8 @@ def get_vessel_ownership(
     """Get recorded ownership and management company associations.
 
     Optionally filter by an exact role value from the ownership table.
-    Check the database's actual role values before using this filter.
+    Role input must be exactly one of those:
+        "beneficial_owner", "commercial_manager", "ism_manager", "operator", "registered_owner", "technical_manager"
     """
     if not vessel_id.strip():
         return to_json({"error": "vessel_id is required"})

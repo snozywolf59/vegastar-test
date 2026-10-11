@@ -27,6 +27,7 @@ def fetch_all(
         connection.set_session(readonly=True, autocommit=False)
         with connection.cursor(cursor_factory=RealDictCursor) as cursor:
             cursor.execute("SET LOCAL statement_timeout = '10s'")
+            # print(query, '\n', params)
             cursor.execute(query, params)
             return [dict(row) for row in cursor.fetchall()]
 
