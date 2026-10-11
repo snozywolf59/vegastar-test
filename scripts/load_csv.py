@@ -88,6 +88,11 @@ def main():
     ap.add_argument("--data-dir", default="data", help="thư mục chứa CSV")
     ap.add_argument("--dsn", default=os.environ.get("DATABASE_URL"),
                     help="chuỗi kết nối; mặc định lấy từ biến môi trường DATABASE_URL")
+    ap.add_argument(
+        "--if-empty",
+        action="store_true",
+        help="skip loading if any destination table already contains data",
+    )
     args = ap.parse_args()
 
     if not args.dsn:
@@ -106,6 +111,23 @@ def main():
                 print("Tạo schema / chỉ mục (nếu chưa có)...")
                 with SCHEMA_FILE.open("r", encoding="utf-8") as f:
                     cur.execute(f.read())
+
+                if args.if_empty:
+                    populated_tables = []
+                    for table, _, _, _ in TABLES:
+                        cur.execute(
+                            sql.SQL("SELECT EXISTS (SELECT 1 FROM {} LIMIT 1)").format(
+                                sql.Identifier(table)
+                            )
+                        )
+                        if cur.fetchone()[0]:
+                            populated_tables.append(table)
+                    if populated_tables:
+                        print(
+                            "Skip CSV loading; tables already contain data: "
+                            + ", ".join(populated_tables)
+                        )
+                        return
 
                 print("Làm rỗng bảng để nạp lại...")
                 cur.execute("TRUNCATE ais_positions, dark_gaps, ownership, vessels "
