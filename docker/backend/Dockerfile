@@ -23,6 +23,7 @@ COPY src ./src
 COPY scripts ./scripts
 
 ENV PATH="/app/.venv/bin:$PATH" \
+    DATA_PATH=/app/data \
     PYTHONUNBUFFERED=1
 
 EXPOSE 8000

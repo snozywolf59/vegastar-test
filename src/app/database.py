@@ -14,10 +14,11 @@ from psycopg2.extras import Json, RealDictCursor, register_uuid
 register_uuid()
 
 class ConversationRepository:
-    """Read and write conversation messages and rolling summaries."""
+    """Read and write conversation messages and vector memories."""
 
-    def __init__(self, database_url: str) -> None:
+    def __init__(self, database_url: str, embedding_dimensions: int) -> None:
         self._database_url = database_url
+        self._embedding_dimensions = embedding_dimensions
 
     def _connect(self) -> psycopg2.extensions.connection:
         return psycopg2.connect(self._database_url, connect_timeout=5)
@@ -54,13 +55,38 @@ class ConversationRepository:
             raise
 
     def initialize(self) -> None:
-        """Ensure sessions have a place to store their rolling summary."""
+        """Ensure vector memory storage and its similarity index exist."""
         with self._connection() as connection, connection.cursor() as cursor:
+            cursor.execute("CREATE EXTENSION IF NOT EXISTS vector")
             cursor.execute(
                 "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS summary TEXT NOT NULL DEFAULT ''"
             )
             cursor.execute(
                 "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS summary_through_sequence BIGINT NOT NULL DEFAULT 0"
+            )
+            cursor.execute(
+                """CREATE TABLE IF NOT EXISTS session_memories (
+                       memory_id BIGSERIAL PRIMARY KEY,
+                       session_id UUID NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
+                       memory_key TEXT NOT NULL,
+                       memory_text TEXT NOT NULL,
+                       embedding vector NOT NULL,
+                       sequence_start BIGINT NOT NULL,
+                       sequence_end BIGINT NOT NULL,
+                       embedding_model TEXT NOT NULL,
+                       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                       UNIQUE (session_id, memory_key)
+                   )"""
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_session_memories_embedding "
+                "ON session_memories USING hnsw "
+                f"((embedding::vector({self._embedding_dimensions})) vector_cosine_ops)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_session_memories_session "
+                "ON session_memories (session_id)"
             )
 
     def get_summary_state(self, conversation_id: UUID) -> tuple[str, int]:
@@ -74,13 +100,81 @@ class ConversationRepository:
                 raise LookupError("Conversation not found.")
             return row[0] or "", int(row[1])
 
-    def update_summary(self, conversation_id: UUID, summary: str, through_sequence: int) -> None:
+    def update_summary_cursor(self, conversation_id: UUID, through_sequence: int) -> None:
         with self._connection() as connection, connection.cursor() as cursor:
             cursor.execute(
-                "UPDATE sessions SET summary = %s, summary_through_sequence = %s, "
+                "UPDATE sessions SET summary_through_sequence = %s, "
                 "updated_at = NOW() WHERE session_id = %s",
-                (summary, through_sequence, conversation_id),
+                (through_sequence, conversation_id),
             )
+
+    def memory_exists(self, conversation_id: UUID, memory_key: str) -> bool:
+        with self._connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT EXISTS (SELECT 1 FROM session_memories "
+                "WHERE session_id = %s AND memory_key = %s)",
+                (conversation_id, memory_key),
+            )
+            return bool(cursor.fetchone()[0])
+
+    def store_memory(
+        self,
+        conversation_id: UUID,
+        memory_key: str,
+        memory_text: str,
+        embedding: list[float],
+        sequence_start: int,
+        sequence_end: int,
+        embedding_model: str,
+    ) -> None:
+        vector = self._vector_literal(embedding)
+        with self._connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """INSERT INTO session_memories
+                   (session_id, memory_key, memory_text, embedding, sequence_start,
+                    sequence_end, embedding_model)
+                   VALUES (%s, %s, %s, %s::vector, %s, %s, %s)
+                   ON CONFLICT (session_id, memory_key)
+                   DO UPDATE SET memory_text = EXCLUDED.memory_text,
+                                 embedding = EXCLUDED.embedding,
+                                 sequence_start = EXCLUDED.sequence_start,
+                                 sequence_end = EXCLUDED.sequence_end,
+                                 embedding_model = EXCLUDED.embedding_model,
+                                 updated_at = NOW()""",
+                (conversation_id, memory_key, memory_text, vector,
+                 sequence_start, sequence_end, embedding_model),
+            )
+
+    def search_memories(
+        self,
+        conversation_id: UUID,
+        embedding: list[float],
+        limit: int,
+        minimum_similarity: float,
+        embedding_model: str,
+    ) -> list[dict[str, Any]]:
+        vector = self._vector_literal(embedding)
+        distance = f"embedding::vector({self._embedding_dimensions}) <=> %s::vector({self._embedding_dimensions})"
+        with self._connection() as connection, connection.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute(
+                f"""WITH scoped_memories AS MATERIALIZED (
+                       SELECT memory_text, sequence_start, sequence_end, embedding
+                       FROM session_memories
+                       WHERE session_id = %s AND embedding_model = %s
+                   )
+                   SELECT memory_text, sequence_start, sequence_end,
+                          1 - ({distance}) AS similarity
+                    FROM scoped_memories
+                    WHERE 1 - ({distance}) >= %s
+                    ORDER BY {distance}
+                    LIMIT %s""",
+                (conversation_id, embedding_model, vector, vector, minimum_similarity, vector, limit),
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
+    @staticmethod
+    def _vector_literal(values: list[float]) -> str:
+        return "[" + ",".join(repr(float(value)) for value in values) + "]"
 
     def create_conversation(self, title: str | None) -> dict[str, Any]:
         with self._connection() as connection, connection.cursor(cursor_factory=RealDictCursor) as cursor:

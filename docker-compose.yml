@@ -32,12 +32,13 @@ services:
     build:
       context: .
       dockerfile: docker/backend/Dockerfile
-    command: ["python", "scripts/load_csv.py", "--data-dir", "./data", "--if-empty"]
+    command: ["sh", "-c", "python scripts/load_csv.py --data-dir \"$$DATA_PATH\" --if-empty"]
     restart: "no"
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      DATA_PATH: /app/data
     volumes:
-      - ./data:/app/data:ro
+      - ${DATA_PATH:-./data}:/app/data:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -52,8 +53,12 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       GEMINI_API_KEY: ${GEMINI_API_KEY}
       GEMINI_MODEL: ${GEMINI_MODEL}
-      CHAT_CONTEXT_TURNS: ${CHAT_CONTEXT_TURNS:-3}
+      GEMINI_EMBEDDING_MODEL: ${GEMINI_EMBEDDING_MODEL}
+      GEMINI_EMBEDDING_DIMENSIONS: ${GEMINI_EMBEDDING_DIMENSIONS:-768}
+      CHAT_CONTEXT_TURNS: ${CHAT_CONTEXT_TURNS:-8}
       AGENT_MAX_TOOL_ROUNDS: ${AGENT_MAX_TOOL_ROUNDS:-6}
+      MEMORY_TOP_K: ${MEMORY_TOP_K:-5}
+      MEMORY_MIN_SIMILARITY: ${MEMORY_MIN_SIMILARITY:-0.25}
     ports:
       - "${API_PORT:-8000}:8000"
     depends_on:

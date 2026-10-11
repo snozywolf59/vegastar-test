@@ -13,6 +13,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 from pydantic import BaseModel, Field
 
 from src.agents.vessel_agent import SYSTEM_PROMPT
+from src.app.memory import create_conversation_memory_tool
 from src.app.services import AppServices
 
 logger = logging.getLogger(__name__)
@@ -117,7 +118,7 @@ async def chat(
             )
             old_messages, recent_messages = _split_history(
                 [message for _, message in sequenced_history],
-                services.settings.chat_context_turns,
+                services.settings.chat_context_turns - 1,
             )
             old_count = len(old_messages)
             new_old_messages = [
@@ -132,40 +133,97 @@ async def chat(
                 conversation_id,
                 payload.message,
             )
+
+            try:
+                if summary and summary_through:
+                    legacy_memory_key = f"legacy-summary:{summary_through}"
+                    exists = await asyncio.to_thread(
+                        repository.memory_exists,
+                        conversation_id,
+                        legacy_memory_key,
+                    )
+                    if not exists:
+                        legacy_embedding = await services.embeddings.aembed_query(summary)
+                        await asyncio.to_thread(
+                            repository.store_memory,
+                            conversation_id,
+                            legacy_memory_key,
+                            summary,
+                            legacy_embedding,
+                            1,
+                            summary_through,
+                            services.settings.gemini_embedding_model,
+                        )
+            except Exception:
+                logger.exception("Legacy conversation summary migration failed.")
+                yield _sse(
+                    "error",
+                    {"code": "memory_migration_failed", "message": "Could not index the existing conversation summary."},
+                )
+                return
+
             if new_old_messages:
                 try:
                     summary_result = await services.summarizer.ainvoke([
                         SystemMessage(content=(
-                            "Update the conversation summary using the existing summary and older messages. "
+                            "Summarize only these older conversation messages as a durable memory. "
                             "Preserve vessel names and identifiers, dates/times, confirmed choices, user preferences, "
                             "open questions, and facts needed to resolve follow-ups. Do not invent facts. "
-                            "Return only the updated concise summary."
+                            "Return only a concise summary of this batch."
                         )),
-                        HumanMessage(content=(
-                            f"Existing summary:\n{summary or '(none)'}\n\n"
-                            f"Messages to incorporate:\n{_format_messages(new_old_messages)}"
-                        )),
+                        HumanMessage(content=_format_messages(new_old_messages)),
                     ])
-                    summary = _content_text(summary_result.content)
+                    memory_text = _content_text(summary_result.content).strip()
+                    if not memory_text:
+                        raise ValueError("The conversation summary was empty.")
                     summary_usage = _normalize_token_usage(
                         summary_result.usage_metadata,
                         model_calls=1,
                     )
+                    memory_embedding = await services.embeddings.aembed_query(memory_text)
+                    sequence_start = min(
+                        sequence
+                        for sequence, message in sequenced_history[:old_count]
+                        if sequence > summary_through
+                    )
+                    sequence_end = max(
+                        sequence
+                        for sequence, message in sequenced_history[:old_count]
+                        if sequence > summary_through
+                    )
                     await asyncio.to_thread(
-                        repository.update_summary,
+                        repository.store_memory,
                         conversation_id,
-                        summary,
-                        max(sequence for sequence, _ in sequenced_history[:old_count]),
+                        f"summary:{sequence_start}:{sequence_end}",
+                        memory_text,
+                        memory_embedding,
+                        sequence_start,
+                        sequence_end,
+                        services.settings.gemini_embedding_model,
+                    )
+                    await asyncio.to_thread(
+                        repository.update_summary_cursor,
+                        conversation_id,
+                        sequence_end,
                     )
                 except Exception:
                     logger.exception("Conversation summarization failed.")
                     yield _sse("error", {"code": "summary_failed", "message": "Could not update conversation summary."})
                     return
-            if summary:
-                history = [SystemMessage(content=f"Conversation summary (older context):\n{summary}"), *history]
-
             try:
-                async for agent_event in services.agent.astream(payload.message, history):
+                memory_tool = create_conversation_memory_tool(
+                    repository,
+                    services.embeddings,
+                    conversation_id,
+                    services.settings.memory_top_k,
+                    services.settings.memory_min_similarity,
+                    services.settings.gemini_embedding_model,
+                )
+                async for agent_event in services.agent.astream(
+                    payload.message,
+                    history,
+                    extra_tools=[memory_tool],
+                ):
                     event_type = agent_event.get("type")
                     if event_type == "token":
                         yield _sse("token", {"text": agent_event.get("content", "")})
@@ -255,6 +313,8 @@ def _messages_after_current_question(
 
 
 def _split_history(messages: list[BaseMessage], recent_turns: int) -> tuple[list[BaseMessage], list[BaseMessage]]:
+    if recent_turns <= 0:
+        return messages, []
     user_indices = [index for index, message in enumerate(messages) if isinstance(message, HumanMessage)]
     if len(user_indices) <= recent_turns:
         return [], messages
@@ -263,11 +323,19 @@ def _split_history(messages: list[BaseMessage], recent_turns: int) -> tuple[list
 
 
 def _format_messages(messages: list[BaseMessage]) -> str:
-    return "\n".join(
-        f"{message.type}: {message.content}"
-        for message in messages
-        if message.content
-    )
+    formatted: list[str] = []
+    for message in messages:
+        if isinstance(message, ToolMessage) and message.name == "search_conversation_memory":
+            continue
+        content = _content_text(message.content)
+        if content:
+            formatted.append(f"{message.type}: {content}")
+        if isinstance(message, AIMessage) and message.tool_calls:
+            formatted.append(
+                "assistant tool calls: "
+                + json.dumps(message.tool_calls, ensure_ascii=False, default=str)
+            )
+    return "\n".join(formatted)
 
 
 def _content_text(content: object) -> str:

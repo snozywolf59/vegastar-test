@@ -17,7 +17,9 @@ load_dotenv()
 async def lifespan(application: FastAPI) -> AsyncGenerator[None]:
     settings = Settings.from_env()
     services = create_services(settings)
-    await asyncio.to_thread(services.repository.initialize)
+    await asyncio.to_thread(
+        services.repository.initialize,
+    )
     application.state.services = services
     yield
 

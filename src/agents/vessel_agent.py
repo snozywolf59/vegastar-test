@@ -29,8 +29,11 @@ Interpret unqualified dates and times in UTC when the data context indicates
 UTC. Explain that a requested-time position is the nearest reported AIS point
 and include its time offset. Do not claim interpolated positions. For routes,
 summarize the tool's returned statistics; do not reproduce large GeoJSON unless
-the user asks for map data. Treat tool output as the sole source for factual
-claims about the supplied dataset."""
+the user asks for map data. When a follow-up refers to earlier conversation
+details not present in recent messages, use search_conversation_memory. Treat
+conversation memory as prior user context, not as a source for current vessel
+facts; verify those with the data tools. Treat tool output as the sole source
+for factual claims about the supplied dataset."""
 
 
 @dataclass
@@ -57,6 +60,7 @@ class VesselAgent:
     ) -> None:
         if max_tool_rounds < 1:
             raise ValueError("max_tool_rounds must be at least 1.")
+        self._chat_model = model
         self._model = model.bind_tools(list(tools))
         self._tools = {item.name: item for item in tools}
         self._max_tool_rounds = max_tool_rounds
@@ -108,8 +112,11 @@ class VesselAgent:
         self,
         question: str,
         history: Sequence[BaseMessage] = (),
+        extra_tools: Sequence[BaseTool] = (),
     ) -> AsyncIterator[dict[str, Any]]:
         """Stream agent events, including tokens and tool execution results."""
+        active_tools = {**self._tools, **{item.name: item for item in extra_tools}}
+        model = self._chat_model.bind_tools(list(active_tools.values()))
         messages = [
             SystemMessage(content=SYSTEM_PROMPT),
             *history,
@@ -124,7 +131,7 @@ class VesselAgent:
             model_calls += 1
 
             # Stream model output chunk by chunk.
-            async for chunk in self._model.astream(messages):
+            async for chunk in model.astream(messages):
                 if response_chunk is None:
                     response_chunk = chunk
                 else:
@@ -176,7 +183,7 @@ class VesselAgent:
                     "args": call["args"],
                 }
 
-                selected_tool = self._tools.get(tool_name)
+                selected_tool = active_tools.get(tool_name)
 
                 if selected_tool is None:
                     result = f"Tool error: unknown tool '{tool_name}'."

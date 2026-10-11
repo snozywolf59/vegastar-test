@@ -1,4 +1,5 @@
 CREATE EXTENSION IF NOT EXISTS postgis;
+CREATE EXTENSION IF NOT EXISTS vector;
 -- ---------- vessels ----------
 CREATE TABLE IF NOT EXISTS vessels (
     vessel_id             TEXT PRIMARY KEY,
@@ -144,6 +145,21 @@ CREATE TABLE IF NOT EXISTS messages (
 
 CREATE INDEX IF NOT EXISTS idx_messages_session_sequence
     ON messages (session_id, sequence_no);
+
+CREATE TABLE IF NOT EXISTS session_memories (
+    memory_id BIGSERIAL PRIMARY KEY,
+    session_id UUID NOT NULL
+        REFERENCES sessions(session_id) ON DELETE CASCADE,
+    memory_key TEXT NOT NULL,
+    memory_text TEXT NOT NULL,
+    embedding vector NOT NULL,
+    sequence_start BIGINT NOT NULL,
+    sequence_end BIGINT NOT NULL,
+    embedding_model TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (session_id, memory_key)
+);
 
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 

@@ -1,7 +1,7 @@
 # Vessel Assistant
 
 FastAPI chat API for vessel data with Gemini tool calling, durable PostgreSQL
-conversation history, and rolling conversation summaries.
+conversation history, and pgvector-backed semantic conversation memory.
 
 ## Requirements
 
@@ -12,32 +12,31 @@ conversation history, and rolling conversation summaries.
 
 ## Configure and run
 
-1. Copy `.env.example` to `.env`, set `GEMINI_API_KEY` and `GEMINI_MODEL`, then
-   adjust the PostgreSQL password if needed.
-2. Start PostgreSQL with PostGIS:
+1. Copy `.env.example` to `.env`, set `GEMINI_API_KEY`, `GEMINI_MODEL`, and
+   `GEMINI_EMBEDDING_MODEL`, then adjust the PostgreSQL password if needed.
+2. Build and start PostgreSQL, load CSV data once, and start the backend:
 
    ```sh
-   docker compose up -d --build postgres
+   docker compose up -d --build
    ```
 
-3. Install dependencies and load the supplied data:
+   The `loader` service runs `scripts/load_csv.py` against the directory set by
+   `DATA_PATH` before the
+   API starts. It skips reloading when any destination table already contains
+   data, so normal restarts do not truncate and reload the dataset.
 
-   ```sh
-   uv sync
-   uv run python scripts/load_csv.py --data-dir data
-   ```
+The chat UI is available at `http://localhost:8000`, and interactive API
+documentation is available at `http://localhost:8000/docs`. Set `DATA_PATH` in
+`.env` to the directory containing all four CSV files; relative paths are
+resolved from the Compose project directory.
 
-4. Start the API:
-
-   ```sh
-   uv run uvicorn src.app.main:app --reload
-   ```
-
-Interactive API documentation is available at `http://localhost:8000/docs`.
-
-`CHAT_CONTEXT_TURNS` sets how many recent user turns are sent verbatim. When
-older turns accumulate, Gemini updates a concise summary stored on that
-conversation; all original messages remain in PostgreSQL.
+`CHAT_CONTEXT_TURNS` sets how many recent user turns are sent verbatim. Older
+turns are summarized in batches, embedded, and stored in the conversation's
+`session_memories` rows. The agent can call `search_conversation_memory` when a
+follow-up needs older context; retrieved memories are always scoped to that
+conversation. Original messages remain in PostgreSQL.
+Set `GEMINI_EMBEDDING_MODEL` to a Gemini embedding model identifier.
+`MEMORY_TOP_K` and `MEMORY_MIN_SIMILARITY` control retrieval size and relevance.
 
 ## Conversation API
 
