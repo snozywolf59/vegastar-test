@@ -115,9 +115,13 @@ class VesselAgent:
             *history,
             HumanMessage(content=question),
         ]
+        token_totals = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+        usage_available = False
+        model_calls = 0
 
         for round_index in range(self._max_tool_rounds + 1):
             response_chunk: AIMessageChunk | None = None
+            model_calls += 1
 
             # Stream model output chunk by chunk.
             async for chunk in self._model.astream(messages):
@@ -136,6 +140,11 @@ class VesselAgent:
             if response_chunk is None:
                 raise RuntimeError("The model returned no response.")
 
+            if response_chunk.usage_metadata:
+                usage_available = True
+                for key in token_totals:
+                    token_totals[key] += int(response_chunk.usage_metadata.get(key, 0) or 0)
+
             messages.append(response_chunk)
 
             # No tool calls: the assistant has finished its answer.
@@ -144,6 +153,10 @@ class VesselAgent:
                     "type": "done",
                     "answer": self._message_text(response_chunk.content),
                     "messages": messages[1:],
+                    "usage": {
+                        **token_totals,
+                        "model_calls": model_calls,
+                    } if usage_available else None,
                 }
                 return
 

@@ -9,7 +9,6 @@ from src.agents.tools._common import (
     parse_time,
     to_json,
 )
-from src.agents.tools.vessel_company_tools import VESSEL_COMPANY_TOOLS
 
 
 class VesselPositionAtTimeInput(BaseModel):

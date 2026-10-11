@@ -61,7 +61,18 @@
     .message.user .avatar { color: #fff; background: #52635d; font-size: 11px; }
     .message-body { min-width: 0; flex: 1; padding-top: 2px; }
     .message-name { margin-bottom: 6px; color: #62716d; font-size: 11px; font-weight: 700; }
-    .message-text { color: #263331; font-size: 14px; line-height: 1.72; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .message-text { color: #263331; font-size: 14px; line-height: 1.72; overflow-wrap: anywhere; }
+    .message-text p { margin: 0 0 12px; }
+    .message-text p:last-child { margin-bottom: 0; }
+    .message-text h1, .message-text h2, .message-text h3, .message-text h4 { margin: 19px 0 8px; line-height: 1.35; letter-spacing: -.02em; }
+    .message-text h1 { font-size: 21px; } .message-text h2 { font-size: 18px; } .message-text h3 { font-size: 16px; } .message-text h4 { font-size: 14px; }
+    .message-text ul, .message-text ol { margin: 7px 0 13px; padding-left: 24px; }
+    .message-text li { padding-left: 3px; margin: 3px 0; }
+    .message-text blockquote { margin: 10px 0; padding: 2px 0 2px 13px; border-left: 3px solid #bdd2c5; color: #60706a; }
+    .message-text pre { overflow-x: auto; margin: 10px 0; padding: 12px 14px; border-radius: 10px; color: #e6eee9; background: #263532; font-size: 12px; line-height: 1.55; }
+    .message-text code { padding: 2px 5px; border-radius: 5px; color: #315e4e; background: #edf3ee; font-size: .9em; }
+    .message-text pre code { padding: 0; color: inherit; background: transparent; }
+    .message-text a { color: var(--green); text-underline-offset: 2px; }
     .tool-chip { display: inline-flex; align-items: center; gap: 7px; max-width: 100%; margin: 0 0 10px; padding: 7px 10px; border: 1px solid #e4e9e4; border-radius: 9px; color: #61706c; background: #fff; font-size: 11px; }
     .tool-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--orange); }
     .tool-detail { color: #8a9591; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -139,6 +150,95 @@
       return String(value).replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
     }
 
+    function normalizeMessageContent(content) {
+      if (Array.isArray(content)) return content.map(part => typeof part === 'string' ? part : part?.text || '').join('');
+      if (typeof content !== 'string') return content == null ? '' : String(content);
+      try {
+        const parsed = JSON.parse(content);
+        if (Array.isArray(parsed)) {
+          const textParts = parsed.map(part => typeof part === 'string' ? part : part?.text || '').filter(Boolean);
+          return textParts.join('');
+        }
+      } catch {}
+      return content;
+    }
+
+    function renderInlineMarkdown(text) {
+      const codeSpans = [];
+      let html = escapeHtml(text).replace(/`([^`]+)`/g, (_, code) => {
+        const marker = `\u0000${codeSpans.length}\u0000`;
+        codeSpans.push(`<code>${code}</code>`);
+        return marker;
+      });
+      html = html
+        .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/__(.+?)__/g, '<strong>$1</strong>')
+        .replace(/~~(.+?)~~/g, '<del>$1</del>')
+        .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>')
+        .replace(/(^|[^_])_([^_\n]+)_(?!_)/g, '$1<em>$2</em>');
+      return html.replace(/\u0000(\d+)\u0000/g, (_, index) => codeSpans[Number(index)]);
+    }
+
+    function renderMarkdown(markdown) {
+      const lines = String(markdown).replace(/\r\n?/g, '\n').split('\n');
+      const output = [];
+      let paragraph = [];
+      let listType = null;
+      let codeLines = null;
+      const flushParagraph = () => {
+        if (paragraph.length) output.push(`<p>${paragraph.map(renderInlineMarkdown).join('<br>')}</p>`);
+        paragraph = [];
+      };
+      const closeList = () => {
+        if (listType) output.push(`</${listType}>`);
+        listType = null;
+      };
+      for (const line of lines) {
+        if (codeLines) {
+          if (/^\s*```/.test(line)) {
+            output.push(`<pre><code>${escapeHtml(codeLines.join('\n'))}</code></pre>`);
+            codeLines = null;
+          } else codeLines.push(line);
+          continue;
+        }
+        if (/^\s*```/.test(line)) {
+          flushParagraph(); closeList(); codeLines = [];
+          continue;
+        }
+        if (!line.trim()) { flushParagraph(); closeList(); continue; }
+        const heading = line.match(/^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$/);
+        if (heading) {
+          flushParagraph(); closeList();
+          const level = Math.min(heading[1].length, 4);
+          output.push(`<h${level}>${renderInlineMarkdown(heading[2])}</h${level}>`);
+          continue;
+        }
+        if (/^\s{0,3}([-*_])(?:\s*\1){2,}\s*$/.test(line)) { flushParagraph(); closeList(); output.push('<hr>'); continue; }
+        const unordered = line.match(/^\s*[-*+]\s+(.+)$/);
+        const ordered = line.match(/^\s*\d+[.)]\s+(.+)$/);
+        if (unordered || ordered) {
+          flushParagraph();
+          const nextType = unordered ? 'ul' : 'ol';
+          if (listType !== nextType) { closeList(); output.push(`<${nextType}>`); listType = nextType; }
+          output.push(`<li>${renderInlineMarkdown((unordered || ordered)[1])}</li>`);
+          continue;
+        }
+        const quote = line.match(/^\s{0,3}>\s?(.*)$/);
+        if (quote) { flushParagraph(); closeList(); output.push(`<blockquote>${renderInlineMarkdown(quote[1])}</blockquote>`); continue; }
+        closeList(); paragraph.push(line);
+      }
+      flushParagraph(); closeList();
+      if (codeLines) output.push(`<pre><code>${escapeHtml(codeLines.join('\n'))}</code></pre>`);
+      return output.join('');
+    }
+
+    function renderMessageText(row) {
+      const element = row.querySelector('.message-text');
+      if (row.classList.contains('assistant')) element.innerHTML = renderMarkdown(row.dataset.raw || '');
+      else element.textContent = row.dataset.raw || '';
+    }
+
     function showWelcome() {
       content.innerHTML = `<section class="welcome">
         <div class="welcome-symbol">⌁</div><div class="eyebrow">Vega · Vessel intelligence</div>
@@ -163,7 +263,8 @@
       const row = document.createElement('article');
       row.className = `message ${role}`;
       row.innerHTML = `<div class="avatar">${role === 'user' ? 'B' : '⌁'}</div><div class="message-body"><div class="message-name">${role === 'user' ? 'Bạn' : 'Vega Assistant'}</div><div class="message-text"></div><div class="message-extra"></div></div>`;
-      row.querySelector('.message-text').textContent = text;
+      row.dataset.raw = normalizeMessageContent(text);
+      renderMessageText(row);
       content.append(row);
       scrollToBottom();
       return row;
@@ -226,7 +327,11 @@
         const data = await response.json();
         const messages = data.messages.filter(message => message.role === 'user' || message.role === 'assistant');
         if (!messages.length) showWelcome();
-        for (const message of messages) addMessage(message.role === 'user' ? 'user' : 'assistant', message.content || '');
+        for (const message of messages) {
+          const normalized = normalizeMessageContent(message.content || '');
+          if (message.role === 'assistant' && !normalized.trim()) continue;
+          addMessage(message.role === 'user' ? 'user' : 'assistant', normalized);
+        }
         scrollToBottom();
       } catch (error) {
         content.replaceChildren();
@@ -267,7 +372,8 @@
         try { data = JSON.parse(dataLines.join('\n')); }
         catch { data = { message: dataLines.join('\n') }; }
         if (eventName === 'token') {
-          assistantRow.querySelector('.message-text').textContent += data.text || '';
+          assistantRow.dataset.raw = (assistantRow.dataset.raw || '') + (data.text || '');
+          renderMessageText(assistantRow);
           assistantRow.querySelector('.typing')?.remove();
           scrollToBottom();
         } else if (eventName === 'tool_call') {

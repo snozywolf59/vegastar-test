@@ -9,9 +9,10 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
 from pydantic import BaseModel, Field
 
+from src.agents.vessel_agent import SYSTEM_PROMPT
 from src.app.services import AppServices
 
 logger = logging.getLogger(__name__)
@@ -125,6 +126,7 @@ async def chat(
                 if sequence > summary_through
             ]
             history = recent_messages
+            summary_usage: dict[str, Any] | None = None
             await asyncio.to_thread(
                 repository.append_user_message,
                 conversation_id,
@@ -145,6 +147,10 @@ async def chat(
                         )),
                     ])
                     summary = _content_text(summary_result.content)
+                    summary_usage = _normalize_token_usage(
+                        summary_result.usage_metadata,
+                        model_calls=1,
+                    )
                     await asyncio.to_thread(
                         repository.update_summary,
                         conversation_id,
@@ -186,15 +192,30 @@ async def chat(
                             messages,
                             payload.message,
                         )
+                        input_metadata = _build_llm_input_metadata(
+                            payload.message,
+                            history,
+                            new_messages,
+                        )
+                        token_usage = _merge_token_usage(
+                            summary_usage,
+                            agent_event.get("usage"),
+                        )
+                        input_metadata["token_usage"] = token_usage
                         await asyncio.to_thread(
                             repository.append_messages,
                             conversation_id,
                             new_messages,
+                            input_metadata,
                         )
                         answer = str(agent_event.get("answer", ""))
                         yield _sse(
                             "done",
-                            {"conversation_id": conversation_id, "answer": answer},
+                            {
+                                "conversation_id": conversation_id,
+                                "answer": answer,
+                                "token_usage": token_usage,
+                            },
                         )
             except asyncio.CancelledError:
                 raise
@@ -259,3 +280,55 @@ def _content_text(content: object) -> str:
             if isinstance(item, dict) and isinstance(item.get("text"), str)
         )
     return str(content)
+
+
+def _build_llm_input_metadata(
+    prompt: str,
+    history: list[BaseMessage],
+    turn_messages: list[BaseMessage],
+) -> dict[str, Any]:
+    return {
+        "system_prompt": SYSTEM_PROMPT,
+        "prompt": prompt,
+        "context": [
+            {"role": message.type, "content": _content_text(message.content)}
+            for message in history
+        ],
+        "tool_inputs": [
+            {"name": call["name"], "arguments": call["args"]}
+            for message in turn_messages
+            if isinstance(message, AIMessage)
+            for call in message.tool_calls
+        ],
+        "tool_outputs": [
+            {"name": message.name, "content": _content_text(message.content)}
+            for message in turn_messages
+            if isinstance(message, ToolMessage)
+        ],
+    }
+
+
+def _normalize_token_usage(
+    usage: dict[str, Any] | None,
+    model_calls: int,
+) -> dict[str, int | None]:
+    return {
+        "input_tokens": int(usage["input_tokens"]) if usage and usage.get("input_tokens") is not None else None,
+        "output_tokens": int(usage["output_tokens"]) if usage and usage.get("output_tokens") is not None else None,
+        "total_tokens": int(usage["total_tokens"]) if usage and usage.get("total_tokens") is not None else None,
+        "model_calls": model_calls,
+    }
+
+
+def _merge_token_usage(
+    *usages: dict[str, int | None] | None,
+) -> dict[str, int | None] | None:
+    available = [usage for usage in usages if usage is not None]
+    if not available:
+        return None
+    result: dict[str, int | None] = {}
+    for key in ("input_tokens", "output_tokens", "total_tokens"):
+        known_values = [usage[key] for usage in available if usage.get(key) is not None]
+        result[key] = sum(known_values) if known_values else None
+    result["model_calls"] = sum(int(usage.get("model_calls") or 0) for usage in available)
+    return result

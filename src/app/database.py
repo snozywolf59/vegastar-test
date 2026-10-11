@@ -179,6 +179,7 @@ class ConversationRepository:
         self,
         conversation_id: UUID,
         messages: list[BaseMessage],
+        final_assistant_metadata: dict[str, Any] | None = None,
     ) -> list[int]:
         """Append LangChain messages atomically and return their database IDs."""
         inserted_ids: list[int] = []
@@ -194,20 +195,26 @@ class ConversationRepository:
                 (conversation_id,),
             )
             sequence = int(cursor.fetchone()[0])
-            for message in messages:
+            for index, message in enumerate(messages):
                 converted = self._from_langchain_message(message)
                 if converted is None:
                     continue
                 role, content, tool_name, tool_call_id, tool_calls = converted
+                metadata = (
+                    final_assistant_metadata or {}
+                    if index == len(messages) - 1 and isinstance(message, AIMessage)
+                    else {}
+                )
                 sequence += 1
                 cursor.execute(
                     """INSERT INTO messages
                        (session_id, sequence_no, role, content, tool_name,
-                        tool_call_id, tool_calls)
-                       VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        tool_call_id, tool_calls, metadata)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                        RETURNING message_id""",
                     (conversation_id, sequence, role, content, tool_name,
-                     tool_call_id, Json(tool_calls) if tool_calls is not None else None),
+                     tool_call_id, Json(tool_calls) if tool_calls is not None else None,
+                     Json(metadata)),
                 )
                 inserted_ids.append(int(cursor.fetchone()[0]))
             cursor.execute(
