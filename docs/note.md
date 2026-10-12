@@ -2,6 +2,11 @@
 
 ## 1. Hạn chế đã biết
 
+### Chưa làm được
+
+Chưa xử lý được thông tin đa hành trình và hiển thị dark gap.
+Về thông tin đa hành trình có thể gom nhóm điểm theo `vessel_id`. Darkgap cũng có thể được gom với nhóm này.
+
 ### Độ tin cậy
 
 - Agent hiện chạy bên trong coroutine của request SSE. Nếu client ngắt kết nối hoặc process API restart, run chưa có `run_id`, event log và worker độc lập để tiếp tục/reconnect.
