@@ -38,6 +38,23 @@ conversation. Original messages remain in PostgreSQL.
 Set `GEMINI_EMBEDDING_MODEL` to a Gemini embedding model identifier.
 `MEMORY_TOP_K` and `MEMORY_MIN_SIMILARITY` control retrieval size and relevance.
 
+## Run tests
+
+Run all unit and integration tests from the project root on Windows:
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s src/tests -v
+```
+
+On Linux or macOS with the virtual environment activated:
+
+```sh
+python -m unittest discover -s src/tests -v
+```
+
+The tests use mocked query results and in-memory fake services, so they do not
+require a running PostgreSQL container or make requests to Gemini.
+
 ## Prompts and SQL
 
 Agent and conversation-summary prompts live in `src/app/prompts/`. Runtime
