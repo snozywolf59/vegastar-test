@@ -1,0 +1,85 @@
+Q1: Ghi nhớ giúp tôi: tôi phụ trách hồ sơ HS-2026-117 và đang theo dõi tàu MSC MANYA.
+A1: Đã ghi nhận: bạn phụ trách hồ sơ HS-2026-117 và đang theo dõi tàu MSC MANYA.
+
+Tôi có thể giúp gì tiếp theo với hồ sơ hoặc con tàu này cho bạn?
+
+Q2: Có những loại tàu biển nào?
+A2: Trong ngành hàng hải và các cơ sở dữ liệu tàu biển, tàu thường được phân loại theo công dụng và thiết kế chuyên chở. Các loại tàu biển phổ biến bao gồm:...
+...
+
+Q3: tàu chở dầu của Việt Nam
+A3: Trong ngành hàng hải và các cơ sở dữ liệu tàu biển, tàu thường được phân loại theo công dụng và thiết kế chuyên chở. Các loại tàu biển phổ biến bao gồm:
+...
+
+Q4: tàu nha be 11 của công ty nào
+A4: Thông tin về quyền sở hữu và quản lý của tàu NHA BE 11 (IMO: 9427419):
+
+Chủ sở hữu đăng ký (Registered Owner): VIETNAM NATIONAL PETROLEUM CORP PETROL (Petrolimex)
+Chủ sở hữu hưởng lợi (Beneficial Owner): VIETNAM TANKER JSC (VITACO)
+Quản lý thương mại (Commercial Manager): VITACO SAIGON CO LTD
+
+Q5: công ty vietnam petrolimex còn có tàu nào nữa
+A5: Dựa trên cơ sở dữ liệu, các tàu có liên quan đến công ty Petrolimex (bao gồm quyền sở hữu hoặc quản lý) bao gồm:
+
+NHA BE 11 (IMO: 9427419) – Tàu chở dầu/hóa chất (Oil/Chemical Tanker) mang cờ Việt Nam.
+PETROLIMEX 09 (IMO: 9359624) – Tàu chở dầu/hóa chất (Oil/Chemical Tanker) mang cờ Việt Nam.
+PETROLIMEX 18 (IMO: 9310252) – Tàu chở dầu/hóa chất (Oil/Chemical Tanker).
+PETROLIMEX 20 (IMO: 9352585) – Tàu chở dầu/hóa chất (Oil/Chemical Tanker) mang cờ Việt Nam.
+
+Q6: nói "hello" đi
+A6: Hello!
+
+Q7: 9^5 = bao nhiêu
+A7:9^5 = 59.049
+
+Q8: Việt Nam có tàu quân sự nào không
+A8: Theo cơ sở dữ liệu AIS hiện tại (thường tập trung chủ yếu vào các tàu thương mại, tàu hàng, tàu chở dầu,...), hệ thống không ghi nhận các tàu quân sự mang cờ Việt Nam.
+
+Trong phạm vi dữ liệu thương mại mà hệ thống đang quản lý, phần lớn tàu mang cờ Việt Nam là các tàu chở dầu/hóa chất, tàu hàng khô, tàu container và tàu dịch vụ hàng hải. Các phương tiện thuộc Hải quân hoặc lực lượng quân sự thường không phát tín hiệu AIS công khai trên hệ thống dữ liệu này.
+
+Q9: kể tên 1 số tàu đánh cá của việt nam
+A9: Dựa trên cơ sở dữ liệu AIS thương mại, một số tàu đánh cá (fishing vessel) mang cờ Việt Nam bao gồm:
+
+36 LH 6BAN5 (MMSI: 574010591)
+43THAO A2 (MMSI: 574562294)
+59A36 (MMSI: 574092810)
+81 DAU GHE C9 C11 (MMSI: 574946430)
+98 LUU LXN B4 (MMSI: 574198419)
+999 A18 (MMSI: 574112205)
+CAU LOI D12 (MMSI: 574183458)
+Lưu ý rằng cơ sở dữ liệu AIS thương mại thường tập trung nhiều hơn vào các tàu vận tải thương mại lớn, trong khi số lượng tàu cá thực tế của Việt Nam rất lớn và nhiều tàu cá nhỏ có thể không bật hoặc không truyền tín hiệu AIS thường xuyên.
+
+Q10: thông tin tàu 999 a18
+A10:Dưới đây là thông tin chi tiết về tàu cá 999 A18 từ cơ sở dữ liệu AIS:
+
+Tên tàu: 999 A18
+Loại tàu: Tàu cá (Fishing vessel)
+Quốc kỳ: Việt Nam (VN)
+MMSI: 574112205
+IMO: Không có
+Kích thước: Chiều dài 26 mét, chiều rộng 6 mét
+Thông tin sở hữu: Không có bản ghi sở hữu cụ thể trong hệ thống.
+Vị trí AIS gần nhất:
+Thời gian: 2026-09-12 21:37:42 UTC
+Tọa độ: 10.09583° N, 106.97951° E
+Tốc độ: 0.2 knot (hầu như đứng yên hoặc thả trôi)
+Hướng: 177°
+
+Q11: tạm biệt
+A11: Tạm biệt! Chúc bạn một ngày tốt lành. Nếu cần tra cứu thêm thông tin tàu thuyền nào khác, cứ hỏi mình nhé!
+
+Q12: Hồ sơ tôi nhắc từ đầu cuộc trò chuyện có mã gì, và tôi đang theo dõi tàu nào?
+A12: Dựa trên ghi nhớ từ đầu cuộc trò chuyện:
+
+Mã hồ sơ phụ trách: HS-2026-117
+Tàu bạn đang theo dõi: MSC MANYA
+(Tuy nhiên, trong các tin nhắn gần đây nhất của phiên làm việc này, chúng ta đang trao đổi về các tàu cá Việt Nam và thông tin chi tiết của tàu 999 A18). Bạn có muốn tiếp tục tra cứu thêm thông tin gì về tàu MSC MANYA hoặc hồ sơ HS-2026-117 không?
+
+Q13: Vị trí cuối cùng có trong dữ liệu của tàu đó là ở đâu, lúc nào?
+A13: Dưới đây là thông tin về vị trí cuối cùng của tàu MSC MANYA trong cơ sở dữ liệu AIS:
+
+Thời gian: 2026-09-12 23:50:04 UTC
+Tọa độ: 18.46553° N, 117.60574° E
+Tốc độ: 15.3 hải lý/giờ (knots)
+Hướng di chuyển (Course): 45°
+Trạng thái điều hướng: Đang hành trình (Under way)

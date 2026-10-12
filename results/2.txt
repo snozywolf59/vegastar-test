@@ -1,0 +1,22 @@
+Q: Tàu có MMSI 563240200 đã đi từ đâu đến đâu trong ngày 11/09/2026 (UTC)?
+A: Tàu EVER VIVA (MMSI: 563240200, IMO: 9950973, Quốc tịch: Singapore) trong ngày 11/09/2026 (UTC) đã di chuyển với các thông tin hành trình như sau:
+
+Điểm xuất phát (lúc 00:00:00 UTC): Tọa độ 6.80919° N, 106.98844° E
+Điểm kết thúc (lúc 23:53:23 UTC): Tọa độ 12.9847° N, 111.21471° E
+Tổng quãng đường đã đi: Khoảng 447,94 hải lý (~829,6 km)
+Tốc độ trung bình: 18,59 hải lý/giờ
+
+Q: Trong 3 ngày dữ liệu, tàu này có lần nào mất tín hiệu AIS không? Mất ở đâu và xuất hiện lại ở đâu
+A: Trong khoảng thời gian dữ liệu, tàu EVER VIVA (MMSI: 563240200) có 1 lần mất tín hiệu AIS (dark gap):
+
+Thời gian mất tín hiệu: Từ ngày 2026-09-12 00:14:41+00:00 đến 2026-09-12 09:43:42+00:00 (khoảng 9 giờ 29 phút).
+Mất tín hiệu tại vị trí: Tọa độ (13.07684, 111.26852)
+Xuất hiện lại tại vị trí: Tọa độ (15.57624, 112.71353)
+Khoảng cách trong thời gian mất tín hiệu: Khoảng 172 hải lý (tốc độ hàm ý khoảng 18,14 hải lý/giờ).
+
+Q: Ngày 12/09 nó đi được quãng đường dài hơn hay ngắn hơn ngày 11/09?
+
+A: Trong ngày 12/09/2026, tàu EVER VIVA đã đi được quãng đường ngắn hơn so với ngày 11/09/2026:
+
+Ngày 11/09/2026: Khoảng 447,94 hải lý
+Ngày 12/09/2026: Khoảng 213,65 hải lý (tính đến thời điểm ghi nhận dữ liệu cuối cùng của ngày)
