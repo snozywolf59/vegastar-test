@@ -29,6 +29,16 @@ Trạng thái hàng hải: Đang hành trình (Under way)
 Tốc độ: 13.1 hải lý/giờ
 Hướng di chuyển: 110° (Hứơng mũi tàu: 111°)
 
+T: search_vessels
+{"ship_name":"kot gayya"}
+get_vessel_details
+{"vessel_id":"014e47c3-9588-7914-9a71-4af09b458f02"}
+get_vessel_last_position
+{"vessel_id":"014e47c3-9588-7914-9a71-4af09b458f02"}
+⌖ Xem bản đồ AIS
+get_vessel_ownership
+{"vessel_id":"014e47c3-9588-7914-9a71-4af09b458f02"}
+
 Q: Chủ sở hữu và các công ty quản lý của tàu này là ai?
 A: Dựa trên cơ sở dữ liệu, thông tin về chủ sở hữu và các công ty quản lý của tàu KOTA GAYA đều thuộc về công ty PACIFIC INTERNATIONAL LINES (có trụ sở tại Singapore) đảm nhận qua tất cả các vai trò chính:
 
@@ -39,15 +49,12 @@ Quản lý ISM (ISM Manager): PACIFIC INTERNATIONAL LINES
 Người vận hành (Operator): PACIFIC INTERNATIONAL LINES
 Quản lý thương mại (Commercial Manager): PACIFIC INTERNATIONAL LINES
 
-Q: Dựa trên cơ sở dữ liệu, thông tin về chủ sở hữu và các công ty quản lý của tàu KOTA GAYA đều thuộc về công ty PACIFIC INTERNATIONAL LINES (có trụ sở tại Singapore) đảm nhận qua tất cả các vai trò chính:
+T: search_vessels
+{"ship_name":"KOTA GAYA"}
+get_vessel_ownership
+{"vessel_id":"014e47c3-9588-7914-9a71-4af09b458f02"}
 
-Chủ sở hữu đăng ký (Registered Owner): PACIFIC INTERNATIONAL LINES
-Chủ sở hữu thụ hưởng (Beneficial Owner): PACIFIC INTERNATIONAL LINES
-Quản lý kỹ thuật (Technical Manager): PACIFIC INTERNATIONAL LINES
-Quản lý ISM (ISM Manager): PACIFIC INTERNATIONAL LINES
-Người vận hành (Operator): PACIFIC INTERNATIONAL LINES
-Quản lý thương mại (Commercial Manager): PACIFIC INTERNATIONAL LINES
-
+Q: Công ty chủ sở hữu đăng ký đó còn những tàu nào khác trong dữ liệu?
 A: Dựa trên cơ sở dữ liệu, công ty chủ sở hữu đăng ký PACIFIC INTERNATIONAL LINES đứng tên sở hữu các tàu sau đây:
 
 KOTA GAYA (IMO: 9616802, Cờ: Singapore)
@@ -58,6 +65,8 @@ KOTA RATU (IMO: 9167435, Cờ: Singapore)
 KOTA SEGAR (IMO: 9681235, Cờ: Singapore)
 KOTA SELAMAT (IMO: 9681261, Cờ: Singapore)
 KOTA SETIA (IMO: 9681285, Cờ: Singapore)
+T: search_vessels_by_company
+{"company_name":"PACIFIC INTERNATIONAL LINES","role":"registered_owner"}
 
 Q: Lúc 21:00 ngày 11/09/2026 (UTC) tàu đó đang ở đâu?
 A: Dựa trên yêu cầu của bạn về vị trí tàu KOTA GAYA vào lúc 21:00 UTC ngày 11/09/2026, đây là điểm dữ liệu AIS gần nhất được hệ thống ghi nhận:
@@ -68,3 +77,7 @@ Kinh độ (Lon): 114.08408°
 Tình trạng hành trình: Đang di chuyển (Under way)
 Tốc độ: 8.2 hải lý/giờ (knots)
 Hướng di chuyển (Course): 51° (Mũi tàu hướng 58°)
+T: search_vessels
+{"ship_name":"KOTA GAYA"}
+get_vessel_position_near_time
+{"event_time":"2026-09-11T21:00:00Z","vessel_id":"014e47c3-9588-7914-9a71-4af09b458f02"}

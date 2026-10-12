@@ -10,6 +10,8 @@ A2: Trong ngành hàng hải và các cơ sở dữ liệu tàu biển, tàu th�
 Q3: tàu chở dầu của Việt Nam
 A3: Trong ngành hàng hải và các cơ sở dữ liệu tàu biển, tàu thường được phân loại theo công dụng và thiết kế chuyên chở. Các loại tàu biển phổ biến bao gồm:
 ...
+T3: search_vessels
+{"flag_code":"VN","ship_type":"Tanker"}
 
 Q4: tàu nha be 11 của công ty nào
 A4: Thông tin về quyền sở hữu và quản lý của tàu NHA BE 11 (IMO: 9427419):
@@ -17,6 +19,11 @@ A4: Thông tin về quyền sở hữu và quản lý của tàu NHA BE 11 (IMO:
 Chủ sở hữu đăng ký (Registered Owner): VIETNAM NATIONAL PETROLEUM CORP PETROL (Petrolimex)
 Chủ sở hữu hưởng lợi (Beneficial Owner): VIETNAM TANKER JSC (VITACO)
 Quản lý thương mại (Commercial Manager): VITACO SAIGON CO LTD
+T4: 
+search_vessels
+{"ship_name":"NHA BE 11"}
+get_vessel_ownership
+{"vessel_id":"018088df-c500-7062-81d6-fb3a7097129f"}
 
 Q5: công ty vietnam petrolimex còn có tàu nào nữa
 A5: Dựa trên cơ sở dữ liệu, các tàu có liên quan đến công ty Petrolimex (bao gồm quyền sở hữu hoặc quản lý) bao gồm:
@@ -26,6 +33,12 @@ PETROLIMEX 09 (IMO: 9359624) – Tàu chở dầu/hóa chất (Oil/Chemical Tank
 PETROLIMEX 18 (IMO: 9310252) – Tàu chở dầu/hóa chất (Oil/Chemical Tanker).
 PETROLIMEX 20 (IMO: 9352585) – Tàu chở dầu/hóa chất (Oil/Chemical Tanker) mang cờ Việt Nam.
 
+T5: 
+search_vessels_by_company
+{"limit":10,"company_name":"PETROLIMEX"}
+search_vessels_by_company
+{"limit":10,"company_name":"VIETNAM NATIONAL PETROLEUM"}
+
 Q6: nói "hello" đi
 A6: Hello!
 
@@ -34,6 +47,9 @@ A7:9^5 = 59.049
 
 Q8: Việt Nam có tàu quân sự nào không
 A8: Theo cơ sở dữ liệu AIS hiện tại (thường tập trung chủ yếu vào các tàu thương mại, tàu hàng, tàu chở dầu,...), hệ thống không ghi nhận các tàu quân sự mang cờ Việt Nam.
+T8: 
+search_vessels
+{"flag_code":"VN","ship_type":"Military"}
 
 Trong phạm vi dữ liệu thương mại mà hệ thống đang quản lý, phần lớn tàu mang cờ Việt Nam là các tàu chở dầu/hóa chất, tàu hàng khô, tàu container và tàu dịch vụ hàng hải. Các phương tiện thuộc Hải quân hoặc lực lượng quân sự thường không phát tín hiệu AIS công khai trên hệ thống dữ liệu này.
 
@@ -48,6 +64,8 @@ A9: Dựa trên cơ sở dữ liệu AIS thương mại, một số tàu đánh 
 999 A18 (MMSI: 574112205)
 CAU LOI D12 (MMSI: 574183458)
 Lưu ý rằng cơ sở dữ liệu AIS thương mại thường tập trung nhiều hơn vào các tàu vận tải thương mại lớn, trong khi số lượng tàu cá thực tế của Việt Nam rất lớn và nhiều tàu cá nhỏ có thể không bật hoặc không truyền tín hiệu AIS thường xuyên.
+T9: search_vessels
+{"limit":10,"flag_code":"VN","ship_type":"Fishing"}
 
 Q10: thông tin tàu 999 a18
 A10:Dưới đây là thông tin chi tiết về tàu cá 999 A18 từ cơ sở dữ liệu AIS:
@@ -65,6 +83,15 @@ Tọa độ: 10.09583° N, 106.97951° E
 Tốc độ: 0.2 knot (hầu như đứng yên hoặc thả trôi)
 Hướng: 177°
 
+T10: search_vessels
+{"ship_name":"999 A18"}
+get_vessel_details
+{"vessel_id":"01a036a1-fd88-7f8b-a810-fb7355389989"}
+get_vessel_last_position
+{"vessel_id":"01a036a1-fd88-7f8b-a810-fb7355389989"}
+get_vessel_ownership
+{"vessel_id":"01a036a1-fd88-7f8b-a810-fb7355389989"}
+
 Q11: tạm biệt
 A11: Tạm biệt! Chúc bạn một ngày tốt lành. Nếu cần tra cứu thêm thông tin tàu thuyền nào khác, cứ hỏi mình nhé!
 
@@ -74,6 +101,9 @@ A12: Dựa trên ghi nhớ từ đầu cuộc trò chuyện:
 Mã hồ sơ phụ trách: HS-2026-117
 Tàu bạn đang theo dõi: MSC MANYA
 (Tuy nhiên, trong các tin nhắn gần đây nhất của phiên làm việc này, chúng ta đang trao đổi về các tàu cá Việt Nam và thông tin chi tiết của tàu 999 A18). Bạn có muốn tiếp tục tra cứu thêm thông tin gì về tàu MSC MANYA hoặc hồ sơ HS-2026-117 không?
+T12: 
+search_conversation_memory
+{"query":"hồ sơ tôi nhắc từ đầu cuộc trò chuyện có mã gì tàu nào đang theo dõi"}
 
 Q13: Vị trí cuối cùng có trong dữ liệu của tàu đó là ở đâu, lúc nào?
 A13: Dưới đây là thông tin về vị trí cuối cùng của tàu MSC MANYA trong cơ sở dữ liệu AIS:
@@ -83,3 +113,7 @@ Tọa độ: 18.46553° N, 117.60574° E
 Tốc độ: 15.3 hải lý/giờ (knots)
 Hướng di chuyển (Course): 45°
 Trạng thái điều hướng: Đang hành trình (Under way)
+T13: search_vessels
+{"ship_name":"MSC MANYA"}
+get_vessel_last_position
+{"vessel_id":"014e46ea-5840-79f9-9af4-2326d173061a"}

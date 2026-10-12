@@ -1,0 +1,40 @@
+Q1: Tàu nào mất tín hiệu AIS lâu nhất trong dữ liệu? Mất ở đâu và xuất hiện lại ở đâu?
+A1: Dựa trên dữ liệu AIS trong hệ thống, tàu có khoảng thời gian mất tín hiệu AIS lâu nhất là:
+
+Tên tàu: WORLD SPIRIT
+MMSI: 636011023
+IMO: 9175925
+Loại tàu: Tàu chở xe (Vehicles Carrier / Flag: Liberia)
+Thời gian mất tín hiệu: Khoảng 63 giờ 47 phút (từ ngày 2026-09-10 00:13:09 UTC đến 2026-09-12 16:01:00 UTC).
+Vị trí mất tín hiệu (điểm cuối trước khi mất):
+Vĩ độ: 9.066532° N
+Kinh độ: 102.828484° E
+Vị trí xuất hiện lại (điểm đầu tiên sau khi có tín hiệu):
+Vĩ độ: 8.531009° N
+Kinh độ: 103.851318° E
+T1: get_vessel_dark_gaps
+{"longest_first":true}
+get_vessel_details
+{"vessel_id":"014e46ee-f7d8-70c5-9b17-305e385d6ba1"}
+
+Q2:Ai là chủ sở hữu đăng ký của tàu đó?
+A2: Chủ sở hữu đăng ký (registered_owner) của tàu WORLD SPIRIT là:
+
+Tên công ty: MARIGOLD TRANSPORT INC
+Quốc gia đăng ký: Liberia
+T2: search_vessels
+{"ship_name":"WORLD SPIRIT"}
+get_vessel_ownership
+{"vessel_id":"014e46ee-f7d8-70c5-9b17-305e385d6ba1","role":"registered_owner"}
+
+Q3: Trước khi mất tín hiệu, tàu đang chạy với tốc độ bao nhiêu?
+A3:Theo bản ghi AIS cuối cùng ngay trước khi mất tín hiệu (lúc 2026-09-10 00:13:09 UTC), tàu WORLD SPIRIT đang chạy với tốc độ 11.6 hải lý/giờ (knots).
+
+Độ lệch thời gian so với mốc yêu cầu: 0 giây (khớp chính xác thời điểm mất tín hiệu).
+Hướng đi (Course): 336°
+Trạng thái điều hướng: Đang hành trình (Under way)
+
+T3: search_vessels
+{"ship_name":"WORLD SPIRIT"}
+get_vessel_position_near_time
+{"vessel_id":"014e46ee-f7d8-70c5-9b17-305e385d6ba1","event_time":"2026-09-10T00:13:09Z"}

@@ -38,6 +38,14 @@ conversation. Original messages remain in PostgreSQL.
 Set `GEMINI_EMBEDDING_MODEL` to a Gemini embedding model identifier.
 `MEMORY_TOP_K` and `MEMORY_MIN_SIMILARITY` control retrieval size and relevance.
 
+## Prompts and SQL
+
+Agent and conversation-summary prompts live in `src/app/prompts/`. Runtime
+conversation and vessel/AIS queries are maintained in named sections under
+`src/app/sql/`; `src/app/resources.py` loads the appropriate prompt or SQL
+section. The database schema and CSV loading statements remain in
+`scripts/schemas.sql` and `scripts/load_csv.py`.
+
 ## Conversation API
 
 Create a conversation:
@@ -49,7 +57,10 @@ curl.exe -X POST http://localhost:8000/conversations \
 ```
 
 Use the returned `session_id` as `{id}` below. Read `token`, `tool_call`,
-`done`, and `error` events as they arrive:
+`map_data`, `done`, and `error` events as they arrive. `map_data` is emitted
+only for AIS position and journey tools and contains normalized GeoJSON:
+The same GeoJSON payload is stored in the final assistant message metadata so
+the map button can be restored when a conversation is opened again.
 
 ```sh
 curl.exe -N -X POST http://localhost:8000/conversations/{id}/chat \
