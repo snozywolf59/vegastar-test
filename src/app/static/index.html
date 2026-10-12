@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f5f5f2">
   <title>Vega · Vessel Assistant</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <style>
     :root {
       color-scheme: light;
@@ -76,6 +77,15 @@
     .tool-chip { display: inline-flex; align-items: center; gap: 7px; max-width: 100%; margin: 0 0 10px; padding: 7px 10px; border: 1px solid #e4e9e4; border-radius: 9px; color: #61706c; background: #fff; font-size: 11px; }
     .tool-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--orange); }
     .tool-detail { color: #8a9591; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .map-button { display: inline-flex; align-items: center; gap: 7px; margin: 0 8px 10px 0; padding: 8px 12px; border: 1px solid #b9d1c4; border-radius: 9px; color: var(--green-dark); background: var(--mint); font-size: 11px; font-weight: 700; }
+    .map-button:hover { background: #dcebe2; }
+    .map-dialog { width: min(960px, calc(100vw - 32px)); padding: 0; border: 0; border-radius: 16px; background: #fff; box-shadow: 0 24px 70px rgba(20,35,28,.24); }
+    .map-dialog::backdrop { background: rgba(20,30,27,.48); backdrop-filter: blur(2px); }
+    .map-header { display: flex; align-items: center; justify-content: space-between; padding: 13px 16px; border-bottom: 1px solid var(--line); }
+    .map-title { font-size: 13px; font-weight: 700; }
+    .map-close { display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid var(--line); border-radius: 9px; color: var(--ink); background: #fff; font-size: 18px; }
+    #ais-map { width: 100%; height: min(70vh, 650px); background: #e9efeb; }
+    .map-note { padding: 9px 16px; color: var(--muted); background: #fafbf9; font-size: 10px; }
     .error-note { margin-top: 10px; padding: 10px 12px; border: 1px solid #f0d2c7; border-radius: 9px; color: #9b4d35; background: #fff8f5; font-size: 12px; line-height: 1.5; }
     .typing { display: inline-flex; gap: 4px; padding: 9px 0; }
     .typing i { width: 5px; height: 5px; border-radius: 50%; background: #80908a; animation: pulse 1s infinite ease-in-out; }
@@ -135,6 +145,12 @@
       </div>
     </main>
   </div>
+  <dialog class="map-dialog" id="map-dialog">
+    <div class="map-header"><div class="map-title" id="map-title">Dữ liệu AIS</div><button class="map-close" id="map-close" aria-label="Đóng bản đồ">×</button></div>
+    <div id="ais-map"></div>
+    <div class="map-note" id="map-note">Đường màu thể hiện hành trình; chấm xanh là điểm bắt đầu, chấm cam là điểm kết thúc và các chấm nhỏ là vị trí AIS.</div>
+  </dialog>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     const list = document.querySelector('#conversation-list');
     const content = document.querySelector('#chat-content');
@@ -143,8 +159,13 @@
     const sendButton = document.querySelector('#send-button');
     const form = document.querySelector('#chat-form');
     const pageTitle = document.querySelector('#page-title');
+    const mapDialog = document.querySelector('#map-dialog');
+    const mapTitle = document.querySelector('#map-title');
+    const mapNote = document.querySelector('#map-note');
     let activeId = null;
     let sending = false;
+    let leafletMap = null;
+    let mapRenderFrame = null;
 
     function escapeHtml(value) {
       return String(value).replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
@@ -330,7 +351,10 @@
         for (const message of messages) {
           const normalized = normalizeMessageContent(message.content || '');
           if (message.role === 'assistant' && !normalized.trim()) continue;
-          addMessage(message.role === 'user' ? 'user' : 'assistant', normalized);
+          const row = addMessage(message.role === 'user' ? 'user' : 'assistant', normalized);
+          if (message.role === 'assistant') {
+            for (const mapData of storedMapData(message.metadata)) addMapButton(row, mapData);
+          }
         }
         scrollToBottom();
       } catch (error) {
@@ -357,6 +381,273 @@
       scrollToBottom();
     }
 
+    function addMapButton(row, data) {
+      if (!data?.geojson) return;
+      row.mapData ??= [];
+      const mapKey = JSON.stringify(data);
+      if (row.mapData.some(item => JSON.stringify(item) === mapKey)) return;
+      row.mapData.push(data);
+      const existingButton = row.querySelector('.map-button');
+      if (existingButton) return;
+      const button = document.createElement('button');
+      button.className = 'map-button';
+      button.type = 'button';
+      button.textContent = '⌖ Xem bản đồ AIS';
+      button.addEventListener('click', () => {
+        try {
+          const geojson = mergeMapData(row.mapData);
+          const toolName = row.mapData.length === 1 ? row.mapData[0].tool : 'combined_map_data';
+          showMap(geojson, toolName);
+        }
+        catch (error) { showError(row, error.message || 'Không thể mở bản đồ.'); }
+      });
+      row.querySelector('.message-extra').append(button);
+      scrollToBottom();
+    }
+
+    function storedMapData(metadata) {
+      let parsed = metadata;
+      if (typeof parsed === 'string') {
+        try { parsed = JSON.parse(parsed); }
+        catch { return []; }
+      }
+      return Array.isArray(parsed?.map_data) ? parsed.map_data : [];
+    }
+
+    function mergeMapData(items) {
+      const features = [];
+      for (const item of items) {
+        const geojson = item?.geojson;
+        if (geojson?.type === 'Feature') features.push(geojson);
+        else if (geojson?.type === 'FeatureCollection') features.push(...(geojson.features || []));
+      }
+      if (features.length === 1) return features[0];
+      return { type: 'FeatureCollection', features };
+    }
+
+    function showMap(geojson, toolName) {
+      mapTitle.textContent = toolName === 'get_vessels_journeys'
+        ? 'Hành trình các tàu'
+        : 'Vị trí và hành trình AIS';
+      const mapElement = resetMapContainer();
+      if (!mapDialog.open) mapDialog.showModal();
+      mapRenderFrame = requestAnimationFrame(() => {
+        mapRenderFrame = null;
+        if (!mapDialog.open) return;
+        if (!leafletIsAvailable()) {
+          renderCoordinateFallback(geojson, mapElement);
+          return;
+        }
+        try {
+          mapNote.textContent = 'Đường màu thể hiện hành trình; chấm xanh là điểm bắt đầu, chấm cam là điểm kết thúc và các chấm nhỏ là vị trí AIS.';
+          leafletMap = L.map(mapElement);
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; OpenStreetMap contributors'
+          }).addTo(leafletMap);
+
+          const geometryLayer = L.geoJSON(geojson, {
+            style: feature => ({
+              color: routeColor(feature?.properties?.vessel_id),
+              weight: 4,
+              opacity: .9,
+              lineCap: 'round',
+              lineJoin: 'round'
+            }),
+            pointToLayer: (_, latlng) => L.circleMarker(latlng, {
+              radius: 6, color: '#174d40', weight: 2, fillColor: '#d9824b', fillOpacity: .9
+            })
+          });
+          const bounds = geometryLayer.getBounds();
+          if (bounds.isValid()) leafletMap.fitBounds(bounds, { padding: [28, 28], maxZoom: 14 });
+          else leafletMap.setView([15, 108], 5);
+          geometryLayer.addTo(leafletMap);
+          addAisPoints(leafletMap, geojson);
+          addRouteEndpoints(leafletMap, geojson);
+          setTimeout(() => leafletMap?.invalidateSize(), 0);
+        } catch (error) {
+          console.warn('Leaflet map failed; using coordinate fallback.', error);
+          renderCoordinateFallback(geojson, resetMapContainer());
+        }
+      });
+    }
+
+    function resetMapContainer() {
+      if (mapRenderFrame !== null) {
+        cancelAnimationFrame(mapRenderFrame);
+        mapRenderFrame = null;
+      }
+      if (leafletMap) {
+        try {
+          leafletMap.off();
+          leafletMap.remove();
+        } catch (error) {
+          console.warn('Could not dispose the previous Leaflet map cleanly.', error);
+        } finally {
+          leafletMap = null;
+        }
+      }
+      const current = document.querySelector('#ais-map');
+      const replacement = document.createElement('div');
+      replacement.id = 'ais-map';
+      current.replaceWith(replacement);
+      return replacement;
+    }
+
+    function leafletIsAvailable() {
+      const stylesheetLoaded = [...document.styleSheets].some(sheet =>
+        typeof sheet.href === 'string' && sheet.href.includes('leaflet')
+      );
+      return Boolean(window.L && stylesheetLoaded);
+    }
+
+    function renderCoordinateFallback(geojson, mapElement) {
+      mapNote.textContent = 'Không tải được bản đồ nền; sơ đồ tọa độ vẫn hiển thị các điểm AIS và đường đi của tàu.';
+      const featureData = routeFeatures(geojson).map(feature => ({
+        feature,
+        coordinates: geometryCoordinates(feature.geometry).filter(isValidCoordinate),
+      })).filter(item => item.coordinates.length);
+      const allCoordinates = featureData.flatMap(item => item.coordinates);
+      if (!allCoordinates.length) {
+        mapElement.textContent = 'Không có tọa độ hợp lệ để hiển thị.';
+        return;
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = 920;
+      canvas.height = 600;
+      canvas.style.width = '100%';
+      canvas.style.height = '100%';
+      mapElement.append(canvas);
+      const context = canvas.getContext('2d');
+      const padding = 52;
+      let minLon = Math.min(...allCoordinates.map(item => item[0]));
+      let maxLon = Math.max(...allCoordinates.map(item => item[0]));
+      let minLat = Math.min(...allCoordinates.map(item => item[1]));
+      let maxLat = Math.max(...allCoordinates.map(item => item[1]));
+      if (maxLon - minLon < .001) { minLon -= .01; maxLon += .01; }
+      if (maxLat - minLat < .001) { minLat -= .01; maxLat += .01; }
+      const project = coordinate => [
+        padding + (coordinate[0] - minLon) / (maxLon - minLon) * (canvas.width - padding * 2),
+        canvas.height - padding - (coordinate[1] - minLat) / (maxLat - minLat) * (canvas.height - padding * 2),
+      ];
+
+      context.fillStyle = '#edf3ef';
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.strokeStyle = '#cfdad3';
+      context.lineWidth = 1;
+      for (let index = 0; index <= 5; index += 1) {
+        const x = padding + index * (canvas.width - padding * 2) / 5;
+        const y = padding + index * (canvas.height - padding * 2) / 5;
+        context.beginPath(); context.moveTo(x, padding); context.lineTo(x, canvas.height - padding); context.stroke();
+        context.beginPath(); context.moveTo(padding, y); context.lineTo(canvas.width - padding, y); context.stroke();
+      }
+
+      for (const { feature, coordinates } of featureData) {
+        const color = routeColor(feature.properties?.vessel_id);
+        if (feature.geometry?.type !== 'Point' && coordinates.length > 1) {
+          context.beginPath();
+          coordinates.forEach((coordinate, index) => {
+            const [x, y] = project(coordinate);
+            if (index === 0) context.moveTo(x, y); else context.lineTo(x, y);
+          });
+          context.strokeStyle = color;
+          context.lineWidth = 4;
+          context.lineCap = 'round';
+          context.lineJoin = 'round';
+          context.stroke();
+        }
+        coordinates.forEach((coordinate, index) => {
+          const [x, y] = project(coordinate);
+          const isStart = index === 0;
+          const isEnd = index === coordinates.length - 1;
+          context.beginPath();
+          context.arc(x, y, isStart || isEnd ? 6 : 3, 0, Math.PI * 2);
+          context.fillStyle = isEnd ? '#d9824b' : isStart ? '#256b59' : color;
+          context.fill();
+          if (isStart || isEnd) {
+            context.strokeStyle = '#fff';
+            context.lineWidth = 2;
+            context.stroke();
+          }
+        });
+      }
+
+      context.fillStyle = '#62716d';
+      context.font = '12px system-ui, sans-serif';
+      context.fillText(`${minLon.toFixed(4)}°`, padding, canvas.height - 18);
+      context.textAlign = 'right';
+      context.fillText(`${maxLon.toFixed(4)}°`, canvas.width - padding, canvas.height - 18);
+      context.textAlign = 'left';
+      context.fillText(`${maxLat.toFixed(4)}°`, 8, padding + 4);
+      context.fillText(`${minLat.toFixed(4)}°`, 8, canvas.height - padding + 4);
+    }
+
+    function geometryCoordinates(geometry) {
+      if (!geometry) return [];
+      if (geometry.type === 'Point') return [geometry.coordinates];
+      return lineCoordinates(geometry);
+    }
+
+    function isValidCoordinate(coordinate) {
+      return Array.isArray(coordinate)
+        && Number.isFinite(coordinate[0])
+        && Number.isFinite(coordinate[1])
+        && coordinate[0] >= -180 && coordinate[0] <= 180
+        && coordinate[1] >= -90 && coordinate[1] <= 90;
+    }
+
+    function routeColor(vesselId = '') {
+      const palette = ['#256b59', '#2f6fb0', '#8a5ca8', '#bd6a32', '#397f88', '#9a4f63'];
+      const hash = String(vesselId).split('').reduce((total, character) => total + character.charCodeAt(0), 0);
+      return palette[hash % palette.length];
+    }
+
+    function routeFeatures(geojson) {
+      if (geojson.type === 'Feature') return [geojson];
+      if (geojson.type === 'FeatureCollection') return geojson.features || [];
+      return [];
+    }
+
+    function lineCoordinates(geometry) {
+      if (!geometry) return [];
+      if (geometry.type === 'LineString') return geometry.coordinates || [];
+      if (geometry.type === 'MultiLineString') return (geometry.coordinates || []).flat();
+      return [];
+    }
+
+    function addRouteEndpoints(map, geojson) {
+      for (const feature of routeFeatures(geojson)) {
+        const coordinates = lineCoordinates(feature.geometry);
+        if (!coordinates.length) continue;
+        const vesselId = feature.properties?.vessel_id;
+        const label = vesselId ? ` · ${vesselId}` : '';
+        const start = coordinates[0];
+        const end = coordinates[coordinates.length - 1];
+        L.circleMarker([start[1], start[0]], {
+          radius: 6, color: '#fff', weight: 2, fillColor: '#256b59', fillOpacity: 1
+        }).bindTooltip(`Điểm bắt đầu${label}`).addTo(map);
+        L.circleMarker([end[1], end[0]], {
+          radius: 6, color: '#fff', weight: 2, fillColor: '#d9824b', fillOpacity: 1
+        }).bindTooltip(`Điểm kết thúc${label}`).addTo(map);
+      }
+    }
+
+    function addAisPoints(map, geojson) {
+      const coordinates = [];
+      routeFeatures(geojson).forEach(feature => coordinates.push(...lineCoordinates(feature.geometry)));
+
+      const maximumPoints = 1500;
+      const step = Math.max(1, Math.ceil(coordinates.length / maximumPoints));
+      for (let index = 0; index < coordinates.length; index += step) {
+        const coordinate = coordinates[index];
+        if (!Array.isArray(coordinate) || coordinate.length < 2) continue;
+        L.circleMarker([coordinate[1], coordinate[0]], {
+          radius: 2.5, stroke: false, fillColor: '#d9824b', fillOpacity: .8
+        }).addTo(map);
+      }
+    }
+
     async function consumeSse(response, assistantRow) {
       if (!response.body) throw new Error('Trình duyệt không hỗ trợ đọc phản hồi stream.');
       const reader = response.body.getReader();
@@ -365,7 +656,6 @@
       let eventName = 'message';
       let dataLines = [];
       let completed = false;
-
       function dispatch() {
         if (!dataLines.length) { eventName = 'message'; return; }
         let data;
@@ -378,6 +668,8 @@
           scrollToBottom();
         } else if (eventName === 'tool_call') {
           addToolCall(assistantRow, data);
+        } else if (eventName === 'map_data') {
+          addMapButton(assistantRow, data);
         } else if (eventName === 'error') {
           showError(assistantRow, data.message || data.code || 'Đã xảy ra lỗi.');
         } else if (eventName === 'done') {
@@ -458,6 +750,10 @@
 
     document.querySelector('#new-chat').addEventListener('click', newConversation);
     document.querySelector('#menu-button').addEventListener('click', () => document.body.classList.toggle('sidebar-open'));
+    document.querySelector('#map-close').addEventListener('click', () => mapDialog.close());
+    mapDialog.addEventListener('close', () => {
+      resetMapContainer();
+    });
     form.addEventListener('submit', event => {
       event.preventDefault();
       const message = input.value;
