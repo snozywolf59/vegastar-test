@@ -16,24 +16,10 @@ from langchain_core.messages import (
 from langchain_core.tools import BaseTool
 
 from src.agents.tools import VESSEL_TOOLS
+from src.app.resources import load_prompt
 
 
-SYSTEM_PROMPT = """You are a maritime vessel data assistant. Answer the user in the
-language they used. Use the available tools for vessel, company, AIS position,
-route, and dark-gap facts. Never invent vessel names, identifiers, positions,
-times, distances, ownership, or statistics. If a tool returns no data, say that
-the supplied dataset has no matching data. Vessel names may be misspelled or
-ambiguous: use search results and ask the user to choose when more than one
-candidate could match. Resolve follow-up references from the conversation.
-Interpret unqualified dates and times in UTC when the data context indicates
-UTC. Explain that a requested-time position is the nearest reported AIS point
-and include its time offset. Do not claim interpolated positions. For routes,
-summarize the tool's returned statistics; do not reproduce large GeoJSON unless
-the user asks for map data. When a follow-up refers to earlier conversation
-details not present in recent messages, use search_conversation_memory. Treat
-conversation memory as prior user context, not as a source for current vessel
-facts; verify those with the data tools. Treat tool output as the sole source
-for factual claims about the supplied dataset."""
+SYSTEM_PROMPT = load_prompt("vessel_agent.md")
 
 
 @dataclass
@@ -130,7 +116,7 @@ class VesselAgent:
             response_chunk: AIMessageChunk | None = None
             model_calls += 1
 
-            # Stream model output chunk by chunk.
+            # Stream model output chunk by chunk
             async for chunk in model.astream(messages):
                 if response_chunk is None:
                     response_chunk = chunk
@@ -173,7 +159,7 @@ class VesselAgent:
                     f"{self._max_tool_rounds} tool rounds."
                 )
 
-            # Execute tool calls after aggregating their streamed chunks.
+            # Execute tool calls after aggregating their streamed chunks
             for call in response_chunk.tool_calls:
                 tool_name = call["name"]
 

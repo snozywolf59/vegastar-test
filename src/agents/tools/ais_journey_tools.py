@@ -9,6 +9,7 @@ from src.agents.tools._common import (
     parse_time,
     to_json,
 )
+from src.app.resources import load_sql_section
 
 
 class VesselPositionAtTimeInput(BaseModel):
@@ -53,12 +54,7 @@ def get_vessel_position_near_time(vessel_id: str, event_time: str) -> str:
     """Get the nearest reported AIS position to an ISO-8601 time and its offset."""
     timestamp = parse_time(event_time)
     rows = fetch_all(
-        """SELECT vessel_id, event_ts, lat, lon, speed_knots, course_deg,
-                  heading_deg, nav_status,
-                  abs(extract(epoch FROM (event_ts - %s::timestamptz))) AS offset_seconds
-           FROM ais_positions WHERE vessel_id = %s
-           ORDER BY abs(extract(epoch FROM (event_ts - %s::timestamptz))), event_ts DESC
-           LIMIT 1""",
+        load_sql_section("vessel_tools.sql", "vessel_position_near_time"),
         (timestamp, vessel_id.strip(), timestamp),
     )
     return to_json({"found": bool(rows), "requested_time": timestamp,
@@ -69,9 +65,7 @@ def get_vessel_position_near_time(vessel_id: str, event_time: str) -> str:
 def get_vessel_last_position(vessel_id: str) -> str:
     """Get the latest AIS position available for a vessel."""
     rows = fetch_all(
-        """SELECT vessel_id, event_ts, lat, lon, speed_knots, course_deg,
-                  heading_deg, nav_status FROM ais_positions
-           WHERE vessel_id = %s ORDER BY event_ts DESC LIMIT 1""",
+        load_sql_section("vessel_tools.sql", "vessel_last_position"),
         (vessel_id.strip(),),
     )
     return to_json({"found": bool(rows), "position": rows[0] if rows else None})
@@ -84,27 +78,7 @@ def get_vessel_route(vessel_id: str, start_time: str, end_time: str) -> str:
     if end <= start:
         return to_json({"error": "end_time must be after start_time"})
     rows = fetch_all(
-        """WITH points AS (
-             SELECT event_ts, lat, lon, speed_knots, geom,
-                    lag(geom) OVER (ORDER BY event_ts, position_id) AS previous_geom
-             FROM ais_positions WHERE vessel_id = %s
-               AND event_ts >= %s AND event_ts < %s AND geom IS NOT NULL
-           ), stats AS (
-             SELECT count(*) AS point_count, min(event_ts) AS first_ts,
-                    max(event_ts) AS last_ts,
-                    (array_agg(lat ORDER BY event_ts, lat))[1] AS first_lat,
-                    (array_agg(lon ORDER BY event_ts, lon))[1] AS first_lon,
-                    (array_agg(lat ORDER BY event_ts DESC, lat DESC))[1] AS last_lat,
-                    (array_agg(lon ORDER BY event_ts DESC, lon DESC))[1] AS last_lon,
-                    avg(speed_knots) AS average_speed_knots,
-                    sum(ST_Distance(geom::geography, previous_geom::geography)
-                        / 1852.0) AS distance_nm
-             FROM points
-           ), route AS (
-             SELECT ST_AsGeoJSON(ST_MakeLine(geom ORDER BY event_ts))::json AS geojson
-             FROM ais_positions WHERE vessel_id = %s
-               AND event_ts >= %s AND event_ts < %s AND geom IS NOT NULL
-           ) SELECT stats.*, route.geojson FROM stats CROSS JOIN route""",
+        load_sql_section("vessel_tools.sql", "vessel_route"),
         (vessel_id.strip(), start, end, vessel_id.strip(), start, end),
     )
     return to_json({"vessel_id": vessel_id, **rows[0]})
@@ -138,11 +112,9 @@ def get_vessel_dark_gaps(
     )
     where_clause = f"WHERE {' AND '.join(filters)}" if filters else ""
     rows = fetch_all(
-        f"""SELECT gap_id, vessel_id, mmsi, gap_start_ts, gap_end_ts,
-                   gap_duration_seconds, distance_nm, implied_speed_knots,
-                   start_lat, start_lon, end_lat, end_lon
-            FROM dark_gaps {where_clause}
-            ORDER BY {ordering}, gap_id LIMIT %s""",
+        load_sql_section("vessel_tools.sql", "dark_gaps")
+        .replace("/*WHERE_CLAUSE*/", where_clause)
+        .replace("/*ORDERING*/", ordering),
         tuple(params),
     )
     return to_json({"count": len(rows), "limit": result_limit, "gaps": rows})
@@ -184,23 +156,9 @@ def get_vessels_journeys(
         params.extend((pattern, pattern))
     params.append(vessel_limit)
     rows = fetch_all(
-        f"""WITH selected AS (
-             SELECT p.vessel_id, min(p.event_ts) AS first_ts, max(p.event_ts) AS last_ts,
-                    count(*) AS total_points
-             FROM ais_positions p WHERE {' AND '.join(filters)}
-             GROUP BY p.vessel_id ORDER BY p.vessel_id LIMIT %s
-           ), sampled AS (
-             SELECT s.vessel_id, s.first_ts, s.last_ts, s.total_points,
-                    p.event_ts, p.geom,
-                    row_number() OVER (PARTITION BY s.vessel_id ORDER BY p.event_ts) AS rn
-             FROM selected s JOIN ais_positions p ON p.vessel_id = s.vessel_id
-               AND p.event_ts >= %s AND p.event_ts < %s AND p.geom IS NOT NULL
-           ) SELECT vessel_id, min(first_ts) AS first_ts, max(last_ts) AS last_ts,
-                    max(total_points) AS total_points,
-                    count(*) FILTER (WHERE rn <= %s) AS returned_points,
-                    ST_AsGeoJSON(ST_MakeLine(geom ORDER BY event_ts)
-                       FILTER (WHERE rn <= %s))::json AS geojson
-             FROM sampled GROUP BY vessel_id ORDER BY vessel_id""",
+        load_sql_section("vessel_tools.sql", "vessel_journeys").replace(
+            "/*FILTERS*/", " AND ".join(filters)
+        ),
         tuple(params + [start, end, point_limit, point_limit]),
     )
     return to_json({"count": len(rows), "journeys": rows,

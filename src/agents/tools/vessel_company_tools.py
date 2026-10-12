@@ -9,6 +9,7 @@ from src.agents.tools._common import (
     fetch_all,
     to_json,
 )
+from src.app.resources import load_sql_section
 
 
 class SearchVesselsInput(BaseModel):
@@ -87,26 +88,9 @@ def search_vessels(
         })
     limit = clamp_limit(limit)
 
-    query = f"""
-        SELECT
-            vessel_id,
-            mmsi,
-            imo,
-            shipname,
-            callsign,
-            flag_code,
-            flag,
-            ship_type_summary,
-            ship_type_detail_name,
-            similarity(shipname, %s) AS name_similarity
-        FROM vessels
-        WHERE {" AND ".join(filters)}
-        ORDER BY
-            similarity(shipname, %s) DESC NULLS LAST,
-            shipname NULLS LAST,
-            vessel_id
-        LIMIT %s
-    """
+    query = load_sql_section("vessel_tools.sql", "search_vessels").replace(
+        "/*FILTERS*/", " AND ".join(filters)
+    )
     if ship_name and ship_name.strip():
         params.append(ship_name.strip().upper())
         params.insert(0, ship_name.strip().upper())
@@ -132,26 +116,7 @@ def get_vessel_details(vessel_id: str) -> str:
     if not vessel_id.strip():
         return to_json({"error": "vessel_id is required"})
 
-    query = """
-        SELECT
-            vessel_id,
-            mmsi,
-            imo,
-            callsign,
-            shipname,
-            flag_code,
-            flag,
-            ship_type_summary,
-            ship_type_detail_name,
-            length_m,
-            width_m,
-            dwt,
-            grt,
-            year_built
-        FROM vessels
-        WHERE vessel_id = %s
-        LIMIT 1
-    """
+    query = load_sql_section("vessel_tools.sql", "vessel_details")
 
     rows = fetch_all(query, (vessel_id.strip(),))
     if not rows:
@@ -178,20 +143,7 @@ def get_vessel_ownership(
     if not vessel_id.strip():
         return to_json({"error": "vessel_id is required"})
 
-    query = """
-        SELECT
-            ownership_id,
-            vessel_id,
-            role,
-            company_name,
-            company_country,
-            start_date
-        FROM ownership
-        WHERE vessel_id = %s
-          AND (%s IS NULL OR role = %s)
-        ORDER BY start_date DESC NULLS LAST, ownership_id DESC
-        LIMIT 100
-    """
+    query = load_sql_section("vessel_tools.sql", "vessel_ownership")
 
     normalized_role = role.strip() if role and role.strip() else None
     rows = fetch_all(
@@ -227,27 +179,7 @@ def search_vessels_by_company(
     company_pattern = f"%{company_name.strip()}%"
     normalized_role = role.strip() if role and role.strip() else None
 
-    query = """
-        SELECT DISTINCT
-            v.vessel_id,
-            v.mmsi,
-            v.imo,
-            v.shipname,
-            v.flag,
-            v.flag_code,
-            v.ship_type_summary,
-            v.ship_type_detail_name
-        FROM vessels AS v
-        JOIN ownership AS o
-          ON o.vessel_id = v.vessel_id
-        WHERE (
-            o.company_name ILIKE %s
-            OR o.company_name_norm ILIKE %s
-        )
-          AND (%s IS NULL OR o.role = %s)
-        ORDER BY v.shipname NULLS LAST, v.vessel_id
-        LIMIT %s
-    """
+    query = load_sql_section("vessel_tools.sql", "vessels_by_company")
 
     rows = fetch_all(
         query,

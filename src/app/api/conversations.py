@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 from src.agents.vessel_agent import SYSTEM_PROMPT
 from src.app.memory import create_conversation_memory_tool
+from src.app.resources import load_prompt
 from src.app.services import AppServices
 
 logger = logging.getLogger(__name__)
@@ -134,6 +135,7 @@ async def chat(
                 payload.message,
             )
 
+            streamed_map_keys: set[str] = set()
             try:
                 if summary and summary_through:
                     legacy_memory_key = f"legacy-summary:{summary_through}"
@@ -165,12 +167,7 @@ async def chat(
             if new_old_messages:
                 try:
                     summary_result = await services.summarizer.ainvoke([
-                        SystemMessage(content=(
-                            "Summarize only these older conversation messages as a durable memory. "
-                            "Preserve vessel names and identifiers, dates/times, confirmed choices, user preferences, "
-                            "open questions, and facts needed to resolve follow-ups. Do not invent facts. "
-                            "Return only a concise summary of this batch."
-                        )),
+                        SystemMessage(content=load_prompt("conversation_summary.md")),
                         HumanMessage(content=_format_messages(new_old_messages)),
                     ])
                     memory_text = _content_text(summary_result.content).strip()
@@ -235,6 +232,16 @@ async def chat(
                                 "arguments": agent_event.get("args", {}),
                             },
                         )
+                    elif event_type == "tool_result":
+                        map_data = _tool_result_to_geojson(
+                            str(agent_event.get("tool", "")),
+                            agent_event.get("content", ""),
+                        )
+                        if map_data is not None:
+                            map_key = json.dumps(map_data, sort_keys=True, default=str)
+                            if map_key not in streamed_map_keys:
+                                streamed_map_keys.add(map_key)
+                                yield _sse("map_data", map_data)
                     elif event_type == "error":
                         yield _sse(
                             "error",
@@ -260,6 +267,7 @@ async def chat(
                             agent_event.get("usage"),
                         )
                         input_metadata["token_usage"] = token_usage
+                        input_metadata["map_data"] = _map_data_from_messages(new_messages)
                         await asyncio.to_thread(
                             repository.append_messages,
                             conversation_id,
@@ -348,6 +356,93 @@ def _content_text(content: object) -> str:
             if isinstance(item, dict) and isinstance(item.get("text"), str)
         )
     return str(content)
+
+
+def _tool_result_to_geojson(tool_name: str, content: object) -> dict[str, Any] | None:
+    """Convert selected AIS tool results into frontend-safe GeoJSON."""
+    if tool_name not in {
+        "get_vessel_position_near_time",
+        "get_vessel_last_position",
+        "get_vessel_route",
+        "get_vessels_journeys",
+    }:
+        return None
+
+    try:
+        result = json.loads(content) if isinstance(content, str) else content
+    except (TypeError, json.JSONDecodeError):
+        return None
+    if not isinstance(result, dict) or result.get("error"):
+        return None
+
+    if tool_name in {"get_vessel_position_near_time", "get_vessel_last_position"}:
+        position = result.get("position")
+        if not isinstance(position, dict):
+            return None
+        latitude, longitude = position.get("lat"), position.get("lon")
+        if not isinstance(latitude, (int, float)) or not isinstance(longitude, (int, float)):
+            return None
+        geojson = {
+            "type": "Feature",
+            "geometry": {"type": "Point", "coordinates": [longitude, latitude]},
+            "properties": {
+                key: value for key, value in position.items() if key not in {"lat", "lon"}
+            },
+        }
+    elif tool_name == "get_vessel_route":
+        geometry = result.get("geojson")
+        if not _is_geojson_geometry(geometry):
+            return None
+        geojson = {
+            "type": "Feature",
+            "geometry": geometry,
+            "properties": {key: value for key, value in result.items() if key != "geojson"},
+        }
+    else:
+        journeys = result.get("journeys")
+        if not isinstance(journeys, list):
+            return None
+        features = [
+            {
+                "type": "Feature",
+                "geometry": journey["geojson"],
+                "properties": {
+                    key: value for key, value in journey.items() if key != "geojson"
+                },
+            }
+            for journey in journeys
+            if isinstance(journey, dict) and _is_geojson_geometry(journey.get("geojson"))
+        ]
+        if not features:
+            return None
+        geojson = {"type": "FeatureCollection", "features": features}
+
+    return {"tool": tool_name, "geojson": geojson}
+
+
+def _map_data_from_messages(messages: list[BaseMessage]) -> list[dict[str, Any]]:
+    """Extract unique map payloads from tool messages before persistence."""
+    map_data: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for message in messages:
+        if not isinstance(message, ToolMessage) or not message.name:
+            continue
+        item = _tool_result_to_geojson(message.name, _content_text(message.content))
+        if item is None:
+            continue
+        key = json.dumps(item, sort_keys=True, default=str)
+        if key not in seen:
+            seen.add(key)
+            map_data.append(item)
+    return map_data
+
+
+def _is_geojson_geometry(value: object) -> bool:
+    return (
+        isinstance(value, dict)
+        and isinstance(value.get("type"), str)
+        and isinstance(value.get("coordinates"), list)
+    )
 
 
 def _build_llm_input_metadata(

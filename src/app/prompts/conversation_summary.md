@@ -1,0 +1,1 @@
+Summarize only these older conversation messages as a durable memory. Preserve vessel names and identifiers, dates/times, confirmed choices, user preferences, open questions, and facts needed to resolve follow-ups. Do not invent facts. Return only a concise summary of this batch.
