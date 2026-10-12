@@ -2,6 +2,7 @@
 
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
+from time import perf_counter
 from typing import Sequence, Any
 
 from langchain_core.language_models import BaseChatModel
@@ -170,6 +171,7 @@ class VesselAgent:
                 }
 
                 selected_tool = active_tools.get(tool_name)
+                tool_started = perf_counter()
 
                 if selected_tool is None:
                     result = f"Tool error: unknown tool '{tool_name}'."
@@ -199,6 +201,7 @@ class VesselAgent:
                     "type": "tool_result",
                     "tool": tool_name,
                     "content": result_text,
+                    "duration_ms": round((perf_counter() - tool_started) * 1000, 2),
                 }
 
     @staticmethod

@@ -4,6 +4,8 @@ import asyncio
 import json
 import logging
 from collections.abc import AsyncIterator
+from datetime import datetime, timezone
+from time import perf_counter
 from typing import Any
 from uuid import UUID
 
@@ -97,10 +99,13 @@ async def chat(
     request: Request,
 ) -> StreamingResponse:
     services = _services(request)
+    request_started_at = datetime.now(timezone.utc)
+    request_started = perf_counter()
 
     async def stream() -> AsyncIterator[str]:
         repository = services.repository
         async with repository.conversation_lock(conversation_id):
+            lock_acquired = perf_counter()
             conversation = await asyncio.to_thread(
                 repository.get_conversation,
                 conversation_id,
@@ -129,6 +134,7 @@ async def chat(
             ]
             history = recent_messages
             summary_usage: dict[str, Any] | None = None
+            summary_duration_ms: float | None = None
             await asyncio.to_thread(
                 repository.append_user_message,
                 conversation_id,
@@ -166,6 +172,7 @@ async def chat(
 
             if new_old_messages:
                 try:
+                    summary_started = perf_counter()
                     summary_result = await services.summarizer.ainvoke([
                         SystemMessage(content=load_prompt("conversation_summary.md")),
                         HumanMessage(content=_format_messages(new_old_messages)),
@@ -203,11 +210,16 @@ async def chat(
                         conversation_id,
                         sequence_end,
                     )
+                    summary_duration_ms = _duration_ms(summary_started)
                 except Exception:
                     logger.exception("Conversation summarization failed.")
                     yield _sse("error", {"code": "summary_failed", "message": "Could not update conversation summary."})
                     return
             try:
+                memory_prepared = perf_counter()
+                agent_started = perf_counter()
+                first_token_ms: float | None = None
+                tool_timings: list[dict[str, Any]] = []
                 memory_tool = create_conversation_memory_tool(
                     repository,
                     services.embeddings,
@@ -223,6 +235,8 @@ async def chat(
                 ):
                     event_type = agent_event.get("type")
                     if event_type == "token":
+                        if first_token_ms is None:
+                            first_token_ms = _duration_ms(agent_started)
                         yield _sse("token", {"text": agent_event.get("content", "")})
                     elif event_type == "tool_start":
                         yield _sse(
@@ -233,6 +247,10 @@ async def chat(
                             },
                         )
                     elif event_type == "tool_result":
+                        tool_timings.append({
+                            "name": str(agent_event.get("tool", "")),
+                            "duration_ms": agent_event.get("duration_ms"),
+                        })
                         map_data = _tool_result_to_geojson(
                             str(agent_event.get("tool", "")),
                             agent_event.get("content", ""),
@@ -268,6 +286,17 @@ async def chat(
                         )
                         input_metadata["token_usage"] = token_usage
                         input_metadata["map_data"] = _map_data_from_messages(new_messages)
+                        input_metadata["timing"] = {
+                            "request_started_at": request_started_at.isoformat(),
+                            "response_completed_at": datetime.now(timezone.utc).isoformat(),
+                            "total_duration_ms": _duration_ms(request_started),
+                            "lock_wait_ms": round((lock_acquired - request_started) * 1000, 2),
+                            "memory_preparation_ms": round((memory_prepared - lock_acquired) * 1000, 2),
+                            "summary_duration_ms": summary_duration_ms,
+                            "agent_duration_ms": _duration_ms(agent_started),
+                            "time_to_first_token_ms": first_token_ms,
+                            "tool_calls": tool_timings,
+                        }
                         await asyncio.to_thread(
                             repository.append_messages,
                             conversation_id,
@@ -481,6 +510,11 @@ def _normalize_token_usage(
         "total_tokens": int(usage["total_tokens"]) if usage and usage.get("total_tokens") is not None else None,
         "model_calls": model_calls,
     }
+
+
+def _duration_ms(started: float) -> float:
+    """Return a stable elapsed duration measured with a monotonic clock."""
+    return round((perf_counter() - started) * 1000, 2)
 
 
 def _merge_token_usage(
