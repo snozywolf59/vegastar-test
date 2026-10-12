@@ -348,13 +348,28 @@
         const data = await response.json();
         const messages = data.messages.filter(message => message.role === 'user' || message.role === 'assistant');
         if (!messages.length) showWelcome();
+        let pendingToolCalls = [];
         for (const message of messages) {
-          const normalized = normalizeMessageContent(message.content || '');
-          if (message.role === 'assistant' && !normalized.trim()) continue;
-          const row = addMessage(message.role === 'user' ? 'user' : 'assistant', normalized);
-          if (message.role === 'assistant') {
-            for (const mapData of storedMapData(message.metadata)) addMapButton(row, mapData);
+          if (message.role === 'user') {
+            pendingToolCalls = [];
+            addMessage('user', normalizeMessageContent(message.content || ''));
+            continue;
           }
+
+          const messageToolCalls = normalizeToolCalls(message.tool_calls);
+          pendingToolCalls.push(...messageToolCalls);
+          if (messageToolCalls.length) continue;
+
+          const normalized = normalizeMessageContent(message.content || '');
+          if (!normalized.trim()) continue;
+          const row = addMessage('assistant', normalized);
+          const toolCalls = uniqueToolCalls([
+            ...pendingToolCalls,
+            ...storedToolCalls(message.metadata),
+          ]);
+          for (const toolCall of toolCalls) addToolCall(row, toolCall);
+          for (const mapData of storedMapData(message.metadata)) addMapButton(row, mapData);
+          pendingToolCalls = [];
         }
         scrollToBottom();
       } catch (error) {
@@ -406,12 +421,41 @@
     }
 
     function storedMapData(metadata) {
-      let parsed = metadata;
+      const parsed = parseMetadata(metadata);
+      return Array.isArray(parsed?.map_data) ? parsed.map_data : [];
+    }
+
+    function storedToolCalls(metadata) {
+      const parsed = parseMetadata(metadata);
+      return normalizeToolCalls(parsed?.tool_inputs);
+    }
+
+    function parseMetadata(metadata) {
+      if (typeof metadata !== 'string') return metadata || {};
+      try { return JSON.parse(metadata); }
+      catch { return {}; }
+    }
+
+    function normalizeToolCalls(toolCalls) {
+      let parsed = toolCalls;
       if (typeof parsed === 'string') {
         try { parsed = JSON.parse(parsed); }
         catch { return []; }
       }
-      return Array.isArray(parsed?.map_data) ? parsed.map_data : [];
+      if (!Array.isArray(parsed)) return [];
+      return parsed
+        .filter(call => call && typeof call.name === 'string')
+        .map(call => ({ name: call.name, arguments: call.arguments ?? call.args ?? {} }));
+    }
+
+    function uniqueToolCalls(toolCalls) {
+      const seen = new Set();
+      return toolCalls.filter(call => {
+        const key = `${call.name}:${JSON.stringify(call.arguments || {})}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
     }
 
     function mergeMapData(items) {
